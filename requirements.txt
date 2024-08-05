@@ -1,0 +1,9 @@
+# HuggingFace
+transformers
+tokenizers
+datasets
+
+# PyTorch
+torch
+torchmetrics
+tqdm
