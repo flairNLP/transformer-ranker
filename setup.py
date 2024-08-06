@@ -15,5 +15,7 @@ setup(
     long_description_content_type="text/markdown",
     author='Lukas Garbas',
     author_email='lukasgarba@gmail.com',
+    url="https://github.com/flairNLP/transformer-ranker",
     install_requires=read_requirements(),
+    python_requires=">=3.8",
 )

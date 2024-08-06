@@ -1,18 +1,21 @@
 # TransformerRanker
 
-A lightweight library to efficiently rank transformer language models for classification tasks
+A lightweight library to efficiently rank transformer language models for classification tasks.
 
-Choosing the right model for your classification dataset can be costly.
-We keep it simple by leveraging _transferability estimation_, eliminating the need for extensive fine-tuning.
-This tool comes with an intuitive three-step interface, compatible with any transformer model and a classification dataset from the HuggingFace and PyTorch ecosystems.
+There is a multitude of pre-trained language models available.
+Fine-tuning each to select which one scores best on your classification dataset is both time and resource expensive. 
+TransformerRanker is a library that can be used for the model selection process, where you can choose any dataset from the HuggingFace collection of [datasets](https://huggingface.co/datasets),
+select different model candidates from the [model hub](https://huggingface.co/models), and let the tool rank them using _transferability estimation_ metrics.
 
-## Example using transformers
+## Installation
 
 You can install the tool using pip:
 
 ```python3
 pip install transformer-ranker
 ```
+
+## Three-step-interface
 
 ### Step 1. Load your dataset
 
@@ -24,11 +27,11 @@ from datasets import load_dataset
 dataset = load_dataset('conll2003')
 ```
 
-Take a look how to load your custom dataset using datasets [here](https://huggingface.co/docs/datasets/v1.1.1/loading_datasets.html#from-local-files).
+Take a look how to [load your custom](https://huggingface.co/docs/datasets/v1.1.1/loading_datasets.html#from-local-files) dataset using HuggingFace datasets.
 
 ### Step 2. Prepare a list of language models
 
-Choose any model names from the model [hub](https://huggingface.co/models):
+Choose any model names from the [model hub](https://huggingface.co/models):
 
 ```python3
 # Prepare a list of model handles
@@ -48,7 +51,7 @@ language_models = [
 language_models = prepare_popular_models('base')
 ```
 
-### Step 3. Initialize the ranker and run it
+### Step 3. Rank Models
 
 Initialize the ranker with your dataset and run it your models:
 
@@ -58,7 +61,7 @@ from transformer_ranker import TransformerRanker
 # Initialize the ranker with your dataset
 ranker = TransformerRanker(dataset, dataset_downsample=0.2)
 
-# Run it with your models
+# Run it with selected transformer models
 results = ranker.run(language_models, batch_size=64)
 ```
 
@@ -79,7 +82,7 @@ Rank 5. sentence-transformers/all-mpnet-base-v2: 2.5709
 ...
 ```
 
-After running it, you can identify most promising models for your datasets.
+Using these results you can exclude the lower-ranked models to only focus on the top-ranked models for further exploration.
 
 ## License
 
