@@ -16,12 +16,13 @@ class Embedder:
         layer_pooling: Optional[str] = None,
         sentence_pooling: Optional[str] = None,
         use_pretokenizer: bool = True,
+        local_files_only: bool = False,
         device: Optional[str] = None,
     ):
         """
-        Embedd sentences using any pre-trained transformer model. It's a word-level embedder, meaning that a sentence is
-        represented by a list of word vectors. If specified, words can be pooled into a sentence-level embedding.
-        ♻️ Feel free to use it if you ever need a simple implementation for word-level embeddings.
+        Embed sentences using a pre-trained transformer model. It works at the word level, meaning each sentence
+        is represented by a list of word vectors. You can pool these into a single sentence embedding if needed.
+        ♻️ Feel free to use it if you ever need a simple implementation for transformer embeddings.
 
         :param model: Name of the model to be used. Either a model handle (e.g. 'bert-base-uncased')
         or a loaded model e.g. AutoModel('bert-base-uncased').
@@ -37,12 +38,15 @@ class Embedder:
         Can be 'cpu' or 'cuda'. If not specified, it defaults to the best available device.
         """
         # Load transformer model
-        self.model = model if isinstance(model, torch.nn.Module) else AutoModel.from_pretrained(model)
-        self.model_name = model if isinstance(model, str) else self.model.config.name_or_path
+        if isinstance(model, torch.nn.Module):
+            self.model = model
+            self.model_name = model.config.name_or_path
+        else:
+            self.model = AutoModel.from_pretrained(model, local_files_only=local_files_only)
+            self.model_name = model
 
         # Load a model-specific tokenizer
-        self.tokenizer = (tokenizer if tokenizer
-                          else AutoTokenizer.from_pretrained(self.model_name, add_prefix_space=True))
+        self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(self.model_name, add_prefix_space=True)
 
         # Add padding token for models that do not have it (e.g. GPT2)
         if self.tokenizer.pad_token is None:
@@ -160,7 +164,7 @@ class Embedder:
             # Store sentence-embedding tensors in a python list
             sentence_embeddings.append(sentence_embedding)
 
-        # Move batch of embeddings to cpu
+        # Move embedding batch to cpu
         if move_embeddings_to_cpu:
             sentence_embeddings = [sentence_embedding.cpu() for sentence_embedding in sentence_embeddings]
 
@@ -179,7 +183,7 @@ class Embedder:
 
     def _extract_relevant_layers(self, batched_embeddings: torch.Tensor) -> torch.Tensor:
         """Keep only relevant layers in each embedding and apply layer-wise pooling if required"""
-        # To maintain original transformer layer order, map negative layer IDs to corresponding positive indices,
+        # To maintain original layer order, map negative layer IDs to positive indices,
         layer_ids = sorted((layer_id if layer_id >= 0 else self.num_transformer_layers + layer_id)
                            for layer_id in self.layer_ids)
 

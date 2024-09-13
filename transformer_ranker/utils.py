@@ -4,6 +4,7 @@ from datasets.dataset_dict import DatasetDict, Dataset
 from tokenizers.pre_tokenizers import Whitespace
 
 import logging
+import warnings
 from typing import List, Dict, Optional, Union, Tuple, Any
 
 
@@ -127,6 +128,10 @@ def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool 
             console_handler.setFormatter(formatter)
             logger.addHandler(console_handler)
 
+    # Ignore specific warning messages from transformers and datasets libraries
+    warnings.simplefilter("ignore", category=FutureWarning)
+    warnings.simplefilter("ignore", category=UserWarning)
+
     logger.propagate = False
 
     return logger
@@ -180,7 +185,7 @@ class DatasetCleaner:
         self.dataset_size = 0
 
     def prepare_dataset(self, dataset: Union[str, DatasetDict]) -> Union[Dataset, DatasetDict]:
-        """Preparing the dataset by data cleaning,
+        """Clean up the dataset, leave only needed columns, down-sample
 
         :param dataset: The original dataset from huggingface
         :return: Return the cleaned dataset, that can be used by the ranker
@@ -325,7 +330,7 @@ class DatasetCleaner:
     def _find_task_type(label_column: str, label_type: Union[type(int), type(str), type(list), type(float)]) -> str:
         """Determine the task type based on the label column's data type."""
         label_type_to_task_type = {
-            int: "sentence classification",  # labels can be integers e.g. "1"
+            int: "sentence classification",  # labels can be integers
             str: "sentence classification",  # or strings e.g. "positive"
             list: "word classification",
             float: "sentence regression",
@@ -500,7 +505,7 @@ class DatasetCleaner:
 
     def log_dataset_info(self) -> None:
         """Log information about the dataset after cleaning it"""
-        logger.info(f"Text and label columns: '{self.text_column}', '{self.label_column}'")
+        logger.info(f"Sentence and label columns: '{self.text_column}', '{self.label_column}'")
         logger.info(f"Task type: '{self.task_type}'")
         downsample_info = f"(downsampled to {self.dataset_downsample})" if self.dataset_downsample else ""
         logger.info(f"Dataset size: {self.dataset_size} {downsample_info}")
