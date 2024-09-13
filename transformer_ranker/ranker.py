@@ -2,9 +2,10 @@ import torch
 from datasets.dataset_dict import Dataset, DatasetDict
 from tqdm import tqdm
 
+from .datacleaner import DatasetCleaner
 from .embedder import Embedder
 from .estimators import HScore, LogME, KNN
-from .utils import DatasetCleaner, Result, configure_logger
+from .utils import Result, configure_logger
 
 import logging
 from typing import List, Optional, Union
