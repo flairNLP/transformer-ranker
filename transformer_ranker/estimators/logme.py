@@ -2,35 +2,38 @@ import torch
 
 
 class LogME:
-    def __init__(self, alpha: float = 1.0, beta: float = 1.0, regression: bool = False, max_iter: int = 11, tol: float = 1e-3):
+    def __init__(self, regression: bool = False):
         """
-        Torch-LogME (Log Marginal Evidence) estimator class.
-        Implementation using pytorch to support both cpu and gpu.
+        LogME (Log of Maximum Evidence) estimator.
+        Paper: https://arxiv.org/abs/2102.11005
+        Code: https://github.com/thuml/LogME/blob/main/LogME.py
 
-        "LogME: Practical Assessment of Pre-trained Models for Transfer Learning"
-        paper link: http://proceedings.mlr.press/v139/you21b.html
-        original code: https://github.com/thuml/LogME/blob/main/LogME.py
+        :param regression: Boolean flag if the task is regression.
+        """
+        self.regression = regression
+        self.score = None
 
+    def fit(
+        self,
+        features: torch.Tensor,
+        labels: torch.Tensor,
+        alpha: float = 1.0,
+        beta: float = 1.0,
+        max_iter: int = 11,
+        tol: float = 1e-3
+    ) -> float:
+        """
+        LogME intuition: estimate the evidence for feature embeddings by iteratively optimizing the prior (alpha) and
+        likelihood (beta), projecting the target labels onto the singular vectors of the feature matrix.
+
+        :param features: Embedding matrix of shape (num_samples, hidden_dim)
+        :param labels: Label vector of shape (num_samples,)
         :param alpha: Initial precision of the prior (controls the regularization strength)
         :param beta: Initial precision of the likelihood (controls the noise in the data)
-        :param regression: Boolean flag indicating whether the task is regression.
         :param tol: Tolerance for the optimization convergence
-        :param max_iter: Maximum iterations for the optimization process
+        :param max_iter: Maximum iterations to optimize alpha and beta
+        :return: LogME score, where higher is better
         """
-        self.alpha = alpha
-        self.beta = beta
-        self.regression = regression
-        self.tol = tol
-        self.max_iter = max_iter
-
-    def fit(self, features: torch.Tensor, labels: torch.Tensor) -> float:
-        """
-        Measure transferability of features using LogME.
-
-        :param features: Embedding matrix of shape (n_samples, hidden_dim)
-        :param labels: Label vector of shape (n_samples,)
-        """
-        # Center all features
         features = features.to(torch.float64)
 
         if self.regression:
@@ -38,20 +41,17 @@ class LogME:
             if len(labels.shape) == 1:
                 labels = labels.unsqueeze(-1)
 
-        # Get the number of samples and the hidden size
-        n_samples, hidden_size = features.shape
+        # Get the number of samples, number of classes, and the hidden size
+        num_samples, hidden_size = features.shape
+        num_classes = labels.shape[1] if self.regression else len(torch.unique(labels))
 
-        # Perform Singular Value Decomposition (SVD) on the features
+        # SVD on the features
         u, singular_values, v_transpose = torch.linalg.svd(features, full_matrices=False)
 
         # Compute sigma which is the square of singular values
         sigma = (singular_values.reshape(-1, 1) ** 2)
 
-        # Initialize the sum of evidences
         evidence_sum = 0.0
-
-        # Determine the number of classes for classification or regression tasks
-        num_classes = labels.shape[1] if self.regression else len(torch.unique(labels))
 
         # Loop over each class (for classification) or each target column (for regression)
         for i in range(num_classes):
@@ -66,47 +66,41 @@ class LogME:
             # Compute residual sum of squares. If k < hidden_size, we compute sum of xi for 0 singular values directly
             residual_sum_squares = (labels_ ** 2).sum() - projected_labels_squared.sum()
 
-            # Start with initial alpha and beta values
-            alpha, beta = torch.tensor(self.alpha), torch.tensor(self.alpha)
-
-            # To ensure that these variables are defined
             residual_error = torch.tensor(0.0)
             precision_weighted_sum = torch.tensor(0.0)
-            tau = torch.tensor(0.0)
+
+            # Start with initial alpha and beta values
+            alpha, beta = torch.tensor(alpha), torch.tensor(beta)
 
             # Iteratively update alpha and beta until convergence or maximum iterations
-            for _ in range(self.max_iter):
+            for _ in range(max_iter):
                 tau = alpha / beta  # Ratio of alpha to beta, representing the noise-to-signal ratio
                 gamma = (sigma / (sigma + tau)).sum()
                 precision_weighted_sum = (sigma * projected_labels_squared / ((tau + sigma) ** 2)).sum()
                 residual_error = (projected_labels_squared / ((1 + sigma / tau) ** 2)).sum() + residual_sum_squares
 
-                # Update alpha (prior precision) based on current estimates
+                # Update alpha (prior precision) and beta (likelihood precision)
                 alpha = gamma / (precision_weighted_sum + 1e-5)
-                # Update beta (likelihood precision)
-                beta = (n_samples - gamma) / (residual_error + 1e-5)
+                beta = (num_samples - gamma) / (residual_error + 1e-5)
 
                 # Compute the new tau and stop if convergence criterion is met
                 new_tau = alpha / beta
-                if abs(new_tau - tau) / tau <= self.tol:
+                if abs(new_tau - tau) / tau <= tol:
                     break
 
-            # Compute evidence based on the optimized alpha and beta
+            # Compute evidence using optimized alpha and beta
             evidence = (hidden_size / 2.0 * torch.log(alpha)
-                        + n_samples / 2.0 * torch.log(beta)
+                        + num_samples / 2.0 * torch.log(beta)
                         - 0.5 * torch.sum(torch.log(alpha + beta * sigma))
                         - beta / 2.0 * residual_error
                         - alpha / 2.0 * precision_weighted_sum
-                        - n_samples / 2.0 * torch.log(torch.tensor(2 * torch.pi)))
+                        - num_samples / 2.0 * torch.log(torch.tensor(2 * torch.pi)))
+            evidence /= num_samples
 
-            # Normalize by the number of samples
-            evidence /= n_samples
-
-            # Compute the mean vector for evidence calculation, this can later be used for prediction
-            mean_vector = 1.0 / (tau + sigma) * singular_values * projected_labels
-            mean_vector = (v_transpose.T @ mean_vector).reshape(-1)
-
-            # Sum the evidence values
+            # Sum the evidence for each class
             evidence_sum += evidence.item()
 
-        return evidence_sum / num_classes
+        logme_score = evidence_sum / num_classes
+        self.score = logme_score
+
+        return logme_score
