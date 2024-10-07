@@ -25,9 +25,7 @@ Since fine-tuning LMs is costly, it is not possible to try them all!
 TransformerRanker is a library that
 
 * **quickly finds the best-suited language model for a given NLP classification task.** 
-  You only need to select a [dataset](https://huggingface.co/datasets) and a list of pre-trained [language models](https://huggingface.co/models) (LMs) from the 🤗 HuggingFace Hub. TransformerRanker will then use 
-  state-of-the-art methods for transferability estimation [(Garbas et al., 2024)](https://aclanthology.org/2024.findings-acl.757/) to quickly and effectively estimate which of these LMs will perform
-  best on the given task!
+  All you need to do is to select a [dataset](https://huggingface.co/datasets) and a list of pre-trained [language models](https://huggingface.co/models) (LMs) from the 🤗 HuggingFace Hub. TransformerRanker will quickly estimate which of these LMs will perform best on the given task!
 
 * **efficiently performs layerwise analysis of LMs.** Transformer LMs have many layers. Use TransformerRanker to identify which intermediate layer
   is best-suited for a downstream task!
