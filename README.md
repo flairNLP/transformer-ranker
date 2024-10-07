@@ -42,10 +42,9 @@ pip install transformer-ranker
 
 ## Example 1: Find the best LM for Named Entity Recognition 
 
-We start with a simple example in which we want to find the best LM for English Named Entity Recognition (NER)
-on the popular CoNLL-03 dataset. 
+Let's say we want to find the best LM for English Named Entity Recognition (NER) on the popular CoNLL-03 dataset. 
 
-To keep this example simple, we use TransformerRanker to choose between two models: `bert-base-cased` and `bert-base-uncased`. 
+To keep this example simple, we use TransformerRanker to only choose between two models: `bert-base-cased` and `bert-base-uncased`. 
 
 The full snippet to do so is as follows: 
 
