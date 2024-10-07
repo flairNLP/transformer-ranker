@@ -85,15 +85,15 @@ Rank 2. bert-base-cased: 2.5137
 This indicates that the uncased variant of BERT is likely to perform better on CoNLL-03!
 
 
-## Example 2: Really find the best LM (by analysing many LMs)
+## Example 2: Really find the best LM (by analyzing many LMs)
 
 The first example only chooses between two LMs. But in practical use cases, you might want to
-choose between dozens of LMs. 
+choose between **dozens** of LMs. 
 
-To help you get started, we compiled two lists of popular LMs. (1) A 'base' list of 
-that contains 17 popular models of medium size. (2) A 'large' list that contains 
-popular models of larger size. These lists contain models that in our opinion are good LMs to try. 
-
+To help you get started, we compiled two lists of popular LMs that in our opinion are good LMs to try:
+1. A 'base' list that contains 17 popular models of medium size.
+2. A 'large' list that contains popular models of larger size.
+   
 To find the best LM for English NER among 17 base LMs, use the following snippet:
 
 ```python3
