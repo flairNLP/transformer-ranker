@@ -29,9 +29,8 @@ TransformerRanker is a library that
   state-of-the-art methods for transferability estimation [(Garbas et al., 2024)](https://aclanthology.org/2024.findings-acl.757/) to quickly and effectively estimate which of these LMs will perform
   best on the given task!
 
-* **efficiently performs layerwise analysis of LMs.** Transformer LMs have many layers. In some use cases, 
-  you might want to know which intermediate layer is best-suited for a downstream task. TransformerRanker 
-  allows you to quickly perform a layerwise analysis to identify the best layers in a model.
+* **efficiently performs layerwise analysis of LMs.** Transformer LMs have many layers. Use TransformerRanker to identify which intermediate layer
+  is best-suited for a downstream task!
 
 <hr> 
 
@@ -69,8 +68,8 @@ ranker = TransformerRanker(dataset, dataset_downsample=0.2)
 results = ranker.run(language_models, batch_size=64)
 ```
 
-If you run this snippet the first time, it will first download the CoNLL-03 dataset from HuggingFace, and also 
-download the two transformer LMs. It will then conduct the estimation for the two LMs. On a GPU-enabled Google Colap 
+If you run this snippet for the first time, it will first download the CoNLL-03 dataset from HuggingFace, and also 
+download the two transformer LMs. It will then conduct the estimation for the two LMs. On a GPU-enabled Google Colab 
 notebook, this should only take a minute or two. 
 
 Print the results by doing
