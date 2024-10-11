@@ -6,10 +6,10 @@ The library has two main goals: (1) rank language models quickly and effectively
 Most examples are short (just 6 lines of code) but come with detailed explanations.
 Here’s a list of available examples and bonus material:
 
-1. [Rank Language Models for Text Classification](https://github.com/lukasgarbas/choose-your-transformer/blob/main/examples/01_TEXT_CLASSIFICATION.md)
-2. [Rank Language Models for Sequence Labeling](https://github.com/lukasgarbas/choose-your-transformer/blob/main/examples/02_SEQUENCE_LABELING.md.md)
-3. [Bonus: Understanding Estimators](https://github.com/lukasgarbas/choose-your-transformer/blob/main/examples/03-advanced.md#transferability-estimation)
-4. [Bonus: Layerwise Analysis](https://github.com/lukasgarbas/choose-your-transformer/blob/main/examples/03-advanced.md#layerwise-analysis)
+1. [Rank Language Models for Text Classification](https://github.com/flairNLP/transformer-ranker/blob/main/examples/01-text-classification.md)
+2. [Rank Language Models for Sequence Labeling](https://github.com/flairNLP/transformer-ranker/blob/main/examples/02-sequence-labeling.md)
+3. [Bonus: Understanding Estimators](https://github.com/flairNLP/transformer-ranker/blob/main/examples/03-advanced.md#transferability-estimation)
+4. [Bonus: Layerwise Analysis](https://github.com/flairNLP/transformer-ranker/blob/main/examples/03-advanced.md#layerwise-analysis)
 
 # Quick Summary
 
@@ -217,6 +217,8 @@ layerwise scores: {-1: 2.7377, -2: 2.8024, -3: 2.8312, -4: 2.8270, -5: 2.8293, -
 ```
 </details>
 
+
+## Important notes
 
 __Inspect the dataset__ It is good to double-check the dataset structure before continuing. Make sure it includes both texts and labels.
 
