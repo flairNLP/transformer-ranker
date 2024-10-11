@@ -10,7 +10,6 @@ from .utils import Result, configure_logger
 import logging
 from typing import List, Optional, Union
 
-
 logger = configure_logger('transformer_ranker', logging.INFO)
 
 
@@ -25,13 +24,13 @@ class TransformerRanker:
         **kwargs
     ):
         """
-        Rank transformer models based on their transferability to a specific NLP task.
+        Rank language models based on their predicted performance for a specific NLP task.
         We use metrics like h-score or logme to estimate the quality of embeddings. Features are taken from
-        deeper layers by averaging all layers or by selecting the best-performing layer in each model.
+        deeper layers by averaging all layers or by selecting the best-scoring layer in each model.
 
-        :param dataset: huggingface dataset containing texts and label columns.
+        :param dataset: huggingface dataset for evaluating transformer models, containing texts and label columns.
         :param dataset_downsample: a fraction to which the dataset should be down-sampled.
-        :param kwargs: additional parameters for data pre-processing.
+        :param kwargs: Additional parameters for data pre-processing.
         """
         # Clean the original dataset and keep only needed columns
         self.data_handler = DatasetCleaner(dataset_downsample=dataset_downsample,
@@ -40,6 +39,7 @@ class TransformerRanker:
                                            task_type=task_type,
                                            **kwargs,
                                            )
+
         self.dataset = self.data_handler.prepare_dataset(dataset)
 
         # Find task type if not given: word classification or text classification
@@ -157,7 +157,7 @@ class TransformerRanker:
 
             # Log the scoring information for a model
             base_log = f"{model_name}, score: {final_score}"
-            layer_estimates_log = (f", layer-wise scores: {result_dictionary.layer_estimates[model_name]}"
+            layer_estimates_log = (f", layerwise scores: {result_dictionary.layer_estimates[model_name]}"
                                    if layer_aggregator == 'bestlayer' else "")
             logger.info(base_log + layer_estimates_log)
 
@@ -202,7 +202,7 @@ class TransformerRanker:
     def _estimate_score(self, estimator, embeddings: torch.Tensor, labels: torch.Tensor) -> float:
         """Use an estimator to score a transformer"""
         regression = self.task_type == "sentence regression"
-        if estimator == 'hscore' and regression:
+        if estimator in ['hscore'] and regression:
             logger.warning(f'Specified estimator="{estimator}" does not support regression tasks.')
 
         estimator_classes = {

@@ -6,7 +6,6 @@ class LogME:
         """
         LogME (Log of Maximum Evidence) estimator.
         Paper: https://arxiv.org/abs/2102.11005
-        Code: https://github.com/thuml/LogME/blob/main/LogME.py
 
         :param regression: Boolean flag if the task is regression.
         """
@@ -15,7 +14,7 @@ class LogME:
 
     def fit(
         self,
-        features: torch.Tensor,
+        embeddings: torch.Tensor,
         labels: torch.Tensor,
         alpha: float = 1.0,
         beta: float = 1.0,
@@ -23,10 +22,10 @@ class LogME:
         tol: float = 1e-3
     ) -> float:
         """
-        LogME intuition: estimate the evidence for feature embeddings by iteratively optimizing the prior (alpha) and
+        LogME intuition: estimate the evidence for embeddings by iteratively optimizing the prior (alpha) and
         likelihood (beta), projecting the target labels onto the singular vectors of the feature matrix.
 
-        :param features: Embedding matrix of shape (num_samples, hidden_dim)
+        :param embeddings: Embedding matrix of shape (num_samples, hidden_dim)
         :param labels: Label vector of shape (num_samples,)
         :param alpha: Initial precision of the prior (controls the regularization strength)
         :param beta: Initial precision of the likelihood (controls the noise in the data)
@@ -34,19 +33,16 @@ class LogME:
         :param max_iter: Maximum iterations to optimize alpha and beta
         :return: LogME score, where higher is better
         """
-        features = features.to(torch.float64)
-
-        if self.regression:
-            labels = labels.to(torch.float64)
-            if len(labels.shape) == 1:
-                labels = labels.unsqueeze(-1)
+        embeddings = embeddings.to(torch.float64)
+        labels = labels.to(torch.float64).unsqueeze(-1) if self.regression and labels.dim() == 1 else labels
 
         # Get the number of samples, number of classes, and the hidden size
-        num_samples, hidden_size = features.shape
-        num_classes = labels.shape[1] if self.regression else len(torch.unique(labels))
+        num_samples, hidden_size = embeddings.shape
+        class_names, counts = torch.unique(labels, return_counts=True)
+        num_classes = labels.shape[1] if self.regression else len(class_names)
 
         # SVD on the features
-        u, singular_values, v_transpose = torch.linalg.svd(features, full_matrices=False)
+        u, singular_values, v_transpose = torch.linalg.svd(embeddings, full_matrices=False)
 
         # Compute sigma which is the square of singular values
         sigma = (singular_values.reshape(-1, 1) ** 2)
@@ -56,7 +52,7 @@ class LogME:
         # Loop over each class (for classification) or each target column (for regression)
         for i in range(num_classes):
             # For classification create a one-hot vector, for regression, use the corresponding column of labels
-            labels_ = labels[:, i] if self.regression else (labels == i).to(torch.float64)
+            labels_ = labels[:, i] if self.regression else (labels == class_names[i]).to(torch.float64)
             labels_ = labels_.unsqueeze(-1)
 
             # Project labels onto the singular vectors (x)
