@@ -236,7 +236,7 @@ class Embedder:
         Subword pooling methods: 'first', 'last', 'mean', 'weighted_mean'"""
         sentence_embedding = torch.zeros_like(word_embeddings[0])
 
-        # Use the first word as a sentence embedding: for models that use CLS token in pre-training
+        # Use the first word as sentence embedding: for models that use CLS token in pre-training
         if self.sentence_pooling == "first":
             sentence_embedding = word_embeddings[0]
 
@@ -244,7 +244,7 @@ class Embedder:
         if self.sentence_pooling == "mean":
             sentence_embedding = torch.mean(word_embeddings, dim=0)
 
-        # Use the last word as a sentence embedding: for Causal LMs (autoregressive)
+        # Use the last word as sentence embedding: for Causal LMs (autoregressive)
         if self.sentence_pooling == "last":
             sentence_embedding = word_embeddings[-1]
 

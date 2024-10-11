@@ -18,7 +18,7 @@ class DatasetCleaner:
         exclude_test_split: bool = False,
         merge_data_splits: bool = True,
         change_ner_encoding_to_spans: bool = True,
-        remove_empty_sentences: bool = False,
+        remove_empty_sentences: bool = True,
         dataset_downsample: Optional[float] = None,
         task_type: Optional[str] = None,
         text_column: Optional[str] = None,
@@ -113,7 +113,7 @@ class DatasetCleaner:
         self.label_column = label_column
         self.task_type = task_type
         self.dataset_size = len(dataset)
-        self.log_dataset_info()
+        self.log_dataset_info(dataset)
 
         # Simplify the dataset: keep only relevant columns
         keep_columns = [self.text_column, self.text_pair_column, self.label_column]
@@ -122,34 +122,27 @@ class DatasetCleaner:
         return dataset
 
     def prepare_labels(self, dataset: Union[DatasetDict, Dataset]) -> torch.Tensor:
-        """Gather labels and convert them to a tensor."""
-        labels = []
-        if isinstance(dataset, DatasetDict):
-            for split in dataset.keys():
-                labels.extend(dataset[split][self.label_column])
-        else:
-            labels.extend(dataset[self.label_column])
+        """Collect labels from dataset splits or directly from the dataset."""
+        labels = (dataset[self.label_column] if isinstance(dataset, Dataset)
+                  else [label for split in dataset for label in dataset[split][self.label_column]])
 
+        # Flatten labels if they contain lists (for token classification)
         labels = [item for sublist in labels for item in sublist] if isinstance(labels[0], list) else labels
         return torch.tensor(labels)
 
     def prepare_sentences(self, dataset: Union[DatasetDict, Dataset]) -> List[str]:
         """Gather sentences in the text column."""
-        sentences = []
         if isinstance(dataset, DatasetDict):
-            for split in dataset.keys():
-                sentences.extend(dataset[split][self.text_column])
+            sentences = [sentence for split in dataset for sentence in dataset[split][self.text_column]]
         else:
-            sentences.extend(dataset[self.text_column])
+            sentences = dataset[self.text_column]
         return sentences
 
     @staticmethod
     def _downsample(dataset: DatasetDict, ratio: float) -> DatasetDict:
         """Down-sample the dataset to the specified ratio."""
         for split in dataset.keys():
-            dataset[split] = dataset[split].shuffle(seed=42).select(
-                range(int(len(dataset[split]) * ratio))
-            )
+            dataset[split] = dataset[split].shuffle(seed=42).select(range(int(len(dataset[split]) * ratio)))
         return dataset
 
     @staticmethod
@@ -240,11 +233,10 @@ class DatasetCleaner:
         def dataset_row_is_clean(example) -> bool:
             text = example[text_column]
             label = example[label_column]
-            entry_has_text = bool(text)  # Check if text is not empty
-            label_is_not_none = label is not None  # Check if label is not None
-            label_is_valid = label_is_not_none and (isinstance(label, int) and label >= 0)
-            keep_entry = entry_has_text and label_is_valid  # keep entries that have text and labels
-            return keep_entry
+            entry_has_text = bool(text) if isinstance(text, list) else True  # non empty string
+            all_tokens_are_valid = all(token != '\uFE0F' for token in text) if isinstance(text, list) else True
+            label_is_valid = label is not None and (all(l >= 0 for l in label) if isinstance(label, list) else label >= 0)
+            return entry_has_text and label_is_valid and all_tokens_are_valid # keep entries that have text and labels
 
         if isinstance(dataset, DatasetDict):
             for split in dataset.keys():
@@ -373,7 +365,7 @@ class DatasetCleaner:
 
         return dataset, span_label_map
 
-    def log_dataset_info(self) -> None:
+    def log_dataset_info(self, dataset) -> None:
         """Log information about dataset after cleaning it"""
         logger.info(f"Sentence and label columns: '{self.text_column}', '{self.label_column}'")
         logger.info(f"Task type: '{self.task_type}'")
