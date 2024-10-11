@@ -1,6 +1,6 @@
 import pytest
 from datasets import load_dataset, DatasetDict, Dataset
-from transformer_ranker.utils import DatasetCleaner
+from transformer_ranker.datacleaner import DatasetCleaner
 import torch
 
 word_classification_datasets = [

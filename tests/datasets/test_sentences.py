@@ -1,5 +1,5 @@
 from datasets import load_dataset, Dataset
-from transformer_ranker.utils import DatasetCleaner
+from transformer_ranker.datacleaner import DatasetCleaner
 from tokenizers.pre_tokenizers import Whitespace
 
 
