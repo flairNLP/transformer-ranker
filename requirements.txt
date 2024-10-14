@@ -1,6 +1,7 @@
-transformers
-tokenizers
 datasets
+sentencepiece
+tokenizers
 torch
 torchmetrics
 tqdm
+transformers
