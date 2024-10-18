@@ -54,17 +54,33 @@ class DatasetCleaner:
         self.text_pair_column = text_pair_column
         self.dataset_size = 0
 
-    def prepare_dataset(self, dataset: Union[str, DatasetDict]) -> Union[Dataset, DatasetDict]:
-        """Clean up the dataset, leave only needed columns, down-sample
+    def prepare_dataset(self, dataset: Union[str, DatasetDict, Dataset]) -> Union[Dataset, DatasetDict]:
+        """Preprocess a dataset, leave only needed columns, down-sample
 
-        :param dataset: The original dataset from huggingface
-        :return: Return the cleaned dataset, that can be used by the ranker
+        :param dataset: dataset from huggingface. It can be one of the following:
+        a DatasetDict (containing multiple splits) or a single dataset split (e.g., Dataset)
+        :return: Return clean and preprocessed dataset, that can be later used in the transformer-ranker
         """
         # Load huggingface dataset
         dataset = datasets.load_dataset(dataset, trust_remote_code=True) if isinstance(dataset, str) else dataset
 
-        # Clone the dataset to avoid modifying the original one
+        # Ensure the dataset is either a DatasetDict (multiple splits) or a Dataset (single split)
+        if not isinstance(dataset, (DatasetDict, Dataset)):
+            raise ValueError(
+                "The dataset must be an instance of either DatasetDict (for multiple splits) "
+                "or Dataset (for a single split) to be preprocessed."
+            )
+
+        # Clone the dataset to avoid changing the original one
         dataset = dataset.map(lambda x: x, load_from_cache_file=False, desc="Cloning the dataset")
+
+        # Remove test split if specified
+        if self.exclude_test_split and 'test' in dataset:
+            logger.info("Removing the test split")
+            del dataset['test']
+
+        if self.merge_data_splits and (isinstance(dataset, DatasetDict) or isinstance(dataset, list)):
+            dataset = self._merge_data_splits(dataset)
 
         # Find text and label columns
         text_column, label_column, label_type = self._find_text_and_label_columns(dataset,
@@ -82,24 +98,15 @@ class DatasetCleaner:
         if self.dataset_downsample:
             dataset = self._downsample(dataset, ratio=self.dataset_downsample)
 
-        # Remove test split if specified
-        if self.exclude_test_split and 'test' in dataset:
-            logger.info("Removing the test split")
-            del dataset['test']
-
         # Pre-tokenize sentences if pre-tokenizer is specified
         if not task_type == "word classification" and self.pre_tokenizer:
             dataset = self._tokenize(dataset, self.pre_tokenizer, text_column)
 
-        # Merge text pairs if text pair column is specified
+        # Concatenate text columns for text-pair tasks
         if self.text_pair_column:
             dataset = self._merge_textpairs(dataset, text_column, self.text_pair_column)
 
-        # Merge data splits for estimation on all available data
-        if self.merge_data_splits:
-            dataset = self._merge_data_splits(dataset)
-
-        # Convert string labels to integers if needed
+        # Convert string labels to integers
         if label_type == str:
             dataset, label_map = self._make_labels_categorical(dataset, label_column)
             logger.info(f"Label map: {label_map}")
@@ -121,36 +128,27 @@ class DatasetCleaner:
 
         return dataset
 
-    def prepare_labels(self, dataset: Union[DatasetDict, Dataset]) -> torch.Tensor:
-        """Collect labels from dataset splits or directly from the dataset."""
-        labels = (dataset[self.label_column] if isinstance(dataset, Dataset)
-                  else [label for split in dataset for label in dataset[split][self.label_column]])
-
-        # Flatten labels if they contain lists (for token classification)
+    def prepare_labels(self, dataset: Dataset) -> torch.Tensor:
+        """Prepare labels as tensors.
+        Flatten labels if they contain lists (for token classification)"""
+        labels = dataset[self.label_column]
         labels = [item for sublist in labels for item in sublist] if isinstance(labels[0], list) else labels
         return torch.tensor(labels)
 
-    def prepare_sentences(self, dataset: Union[DatasetDict, Dataset]) -> List[str]:
+    def prepare_sentences(self, dataset: Dataset) -> List[str]:
         """Gather sentences in the text column."""
-        if isinstance(dataset, DatasetDict):
-            sentences = [sentence for split in dataset for sentence in dataset[split][self.text_column]]
-        else:
-            sentences = dataset[self.text_column]
-        return sentences
+        return dataset[self.text_column]
 
     @staticmethod
-    def _downsample(dataset: DatasetDict, ratio: float) -> DatasetDict:
-        """Down-sample the dataset to the specified ratio."""
-        for split in dataset.keys():
-            dataset[split] = dataset[split].shuffle(seed=42).select(range(int(len(dataset[split]) * ratio)))
+    def _downsample(dataset: Dataset, ratio: float) -> Dataset:
+        """Reduce the dataset to a chosen ratio."""
+        dataset = dataset.shuffle(seed=42).select(range(int(len(dataset) * ratio)))
         return dataset
 
     @staticmethod
-    def _find_text_and_label_columns(dataset: DatasetDict, text_column: Optional[str] = None,
+    def _find_text_and_label_columns(dataset: Dataset, text_column: Optional[str] = None,
                                      label_column: Optional[str] = None) -> Tuple[str, str, type[Any]]:
         """Determine text and label columns in hf datasets based on popular keywords"""
-        column_names = dataset[next(iter(dataset))].column_names
-
         # A list of mostly used column names for texts
         text_columns = [
             'text', 'sentence', 'token', 'tweet', 'document', 'paragraph', 'description', 'comment',
@@ -163,6 +161,7 @@ class DatasetCleaner:
             'sentiment', 'polarity', 'emotion', 'rating', 'stance'
         ]
 
+        column_names = dataset.column_names
         if not text_column:
             # Iterate over keywords and check if it exists in the dataset
             text_column = next((col for keyword in text_columns for col in column_names if keyword in col), None)
@@ -174,24 +173,21 @@ class DatasetCleaner:
             raise KeyError(f"Can not determine the {missing} column. Specify {missing}_column=\"...\" "
                            f"from available columns: {column_names}.")
 
-        label_type = type(dataset[next(iter(dataset))][label_column][0])
-
+        label_type = type(dataset[label_column][0])
         return text_column, label_column, label_type
 
     @staticmethod
-    def _merge_textpairs(dataset: DatasetDict, text_column: str, text_pair_column: str) -> DatasetDict:
-        """Merge text pairs into a single column with a separator."""
+    def _merge_textpairs(dataset: Dataset, text_column: str, text_pair_column: str) -> Dataset:
+        """Concatenate text pairs into a single text using separator token"""
         def merge_texts(example: Dict[str, str]) -> Dict[str, str]:
             example[text_column] = example[text_column] + " [SEP] " + example[text_pair_column]
             return example
-
-        for split in dataset.keys():
-            dataset[split] = dataset[split].map(merge_texts, num_proc=None, desc="Merge sentence pair columns")
+        dataset = dataset.map(merge_texts, num_proc=None, desc="Merge sentence pair columns")
         return dataset
 
     @staticmethod
     def _find_task_type(label_column: str, label_type: Union[type(int), type(str), type(list), type(float)]) -> str:
-        """Determine the task type based on the label column's data type."""
+        """Determine task type based on the label column's data type."""
         label_type_to_task_type = {
             int: "sentence classification",  # labels can be integers
             str: "sentence classification",  # or strings e.g. "positive"
@@ -202,33 +198,30 @@ class DatasetCleaner:
         task_type = label_type_to_task_type.get(label_type, None)
 
         if not task_type:
-            raise ValueError(f"Unable to determine task type from the label column '{label_column}' "
+            raise ValueError(f"Cannot determine task type from the label column '{label_column}' "
                              f"value: {type(label_type)}.")
         return task_type
 
     @staticmethod
-    def _tokenize(dataset: DatasetDict, pre_tokenizer: Whitespace, text_column: str) -> DatasetDict:
-        """Tokenize the dataset using the specified hf pre-tokenizer (e.g. Whitespace)"""
+    def _tokenize(dataset: Dataset, pre_tokenizer: Whitespace, text_column: str) -> Dataset:
+        """Tokenize a dataset using hf pre-tokenizer (e.g. Whitespace)"""
         def pre_tokenize(example):
             encoding = pre_tokenizer.pre_tokenize_str(example[text_column])
             example[text_column] = [token for token, _ in encoding]
             return example
 
-        for split in dataset.keys():
-            dataset[split] = dataset[split].map(pre_tokenize, num_proc=None,
-                                                desc="Pre-tokenizing texts using Whitespace")
+        dataset = dataset.map(pre_tokenize, num_proc=None, desc="Pre-tokenizing texts using Whitespace")
         return dataset
 
     @staticmethod
-    def _merge_data_splits(dataset: DatasetDict) -> Dataset:
-        """Merge data splits into a single dataset."""
+    def _merge_data_splits(dataset: Union[DatasetDict, List[Dataset]]) -> Dataset:
+        """Merge DatasetDict into a single dataset."""
         datasets_to_merge = [dataset[split] for split in dataset.keys()]
         merged_dataset = datasets.concatenate_datasets(datasets_to_merge)
         return merged_dataset
 
     @staticmethod
-    def _remove_empty_rows(dataset: Union[DatasetDict, Dataset], text_column: str, label_column: str) -> Union[
-        DatasetDict, Dataset]:
+    def _remove_empty_rows(dataset: Dataset, text_column: str, label_column: str) -> Dataset:
         """Remove entries with empty sentences or labels."""
         def dataset_row_is_clean(example) -> bool:
             text = example[text_column]
@@ -238,100 +231,71 @@ class DatasetCleaner:
             label_is_valid = label is not None and (all(l >= 0 for l in label) if isinstance(label, list) else label >= 0)
             return entry_has_text and label_is_valid and all_tokens_are_valid # keep entries that have text and labels
 
-        if isinstance(dataset, DatasetDict):
-            for split in dataset.keys():
-                dataset[split] = dataset[split].filter(dataset_row_is_clean, desc="Removing empty sentences")
-        else:
-            dataset = dataset.filter(dataset_row_is_clean, desc="Removing empty sentences")
-
+        dataset = dataset.filter(dataset_row_is_clean, desc="Removing empty sentences")
         return dataset
 
     @staticmethod
-    def _remove_columns(dataset: Union[DatasetDict, Dataset], keep_columns: List[str]) -> Union[DatasetDict, Dataset]:
+    def _remove_columns(dataset: Dataset, keep_columns: List[str]) -> Dataset:
         """Remove columns from the dataset that are not in the keep_columns list
         (e.g. remove all columns except the text and the label column)"""
-        if isinstance(dataset, DatasetDict):
-            for split in dataset.keys():
-                columns_to_remove = [col for col in dataset[split].column_names if col not in keep_columns]
-                dataset[split] = dataset[split].remove_columns(columns_to_remove)
-        else:
-            columns_to_remove = [col for col in dataset.column_names if col not in keep_columns]
-            dataset = dataset.remove_columns(columns_to_remove)
+        columns_to_remove = [col for col in dataset.column_names if col not in keep_columns]
+        dataset = dataset.remove_columns(columns_to_remove)
         return dataset
 
     @staticmethod
-    def _make_labels_categorical(
-            dataset: Union[DatasetDict, Dataset],
-            label_column: str
-    ) -> Tuple[Union[DatasetDict, Dataset], Dict[str, int]]:
-        """Convert string labels to categorical integer labels for sentence classification tasks."""
-        unique_labels = set()
-        if isinstance(dataset, DatasetDict):
-            for split in dataset.keys():
-                unique_labels.update(dataset[split][label_column])
-        else:
-            unique_labels.update(dataset[label_column])
+    def _make_labels_categorical(dataset: Dataset, label_column: str) -> Tuple[Dataset, Dict[str, int]]:
+        """Convert string labels in the dataset to categorical integer labels, for classification tasks.
 
-        label_map = {str(label): idx for idx, label in enumerate(sorted(unique_labels))}
+        :param dataset: The dataset containing the labels to convert.
+        :param label_column: The column name in the dataset that contains the labels.
+        :return: A tuple with the new dataset (with integer labels) and the label map.
+        """
+        unique_labels = sorted(set(dataset[label_column]))
+        label_map = {label: idx for idx, label in enumerate(unique_labels)}
 
         def map_labels(example):
             example[label_column] = label_map[example[label_column]]
             return example
 
-        if isinstance(dataset, DatasetDict):
-            for split in dataset.keys():
-                dataset[split] = dataset[split].map(map_labels, num_proc=None,
-                                                    desc="Mapping string labels to integers")
-        else:
-            dataset = dataset.map(map_labels, num_proc=None, desc="Mapping string labels to integers")
-
+        dataset = dataset.map(map_labels, num_proc=None, desc="Mapping string labels to integers")
         return dataset, label_map
 
     @staticmethod
     def _change_to_span_encoding(
-        dataset: Union[DatasetDict, Dataset],
+        dataset: Dataset,
         label_column: str,
         label_map: Optional[Dict[str, int]] = None,
-    ) -> Tuple[Union[DatasetDict, Dataset], Dict[str, int]]:
-        """Convert BIO encoding labels to span encoding and update the label map.
+    ) -> Tuple[Dataset, Dict[str, int]]:
+        """Remove BIO prefixes for NER labels and create a new label map.
+        Example: ['B-PER', 'I-PER', 'O'] -> ['PER', 'PER', 'O']
+        Original label map: {'B-PER': 0, 'I-PER': 1, 'O': 2}
+        Converted span label map: {'PER': 0, 'O': 1}
 
-        This method transforms labels from BIO (Beginning, Inside, Outside) encoding
-        to a simpler span encoding by removing the BIO prefix. It also updates the
-        label map accordingly.
-
-        Original BIO labels: ['B-PER', 'I-PER', 'O', 'B-LOC', 'I-LOC']
-        Converted span labels: ['PER', 'PER', 'O', 'LOC', 'LOC']
-
-        Original label map: {'B-PER': 0, 'I-PER': 1, 'O': 2, 'B-LOC': 3, 'I-LOC': 4}
-        Converted span label map: {'PER': 0, 'O': 1, 'LOC': 2}
-
-        Returns:
-        - The dataset with label column converted to span encoding.
-        - The updated span label map.
+        :param dataset: The dataset containing BIO labels.
+        :param label_column: The name of the label column.
+        :param label_map: Optional dictionary to map BIO labels to integers. If not provided, a new one will be created.
+        :return: A tuple with the dataset containing new labels and the updated label map.
         """
-        # Try to retrieve the label map from dataset features
+        # Attempt to get the label map from dataset features information
         if not label_map:
-            features = dataset[next(iter(dataset))].features if isinstance(dataset, DatasetDict) else dataset.features
-
+            features = dataset.features
             if label_column in features and hasattr(features[label_column], 'feature') and hasattr(
                     features[label_column].feature, 'names'):
-                id2label = features[label_column].feature.names
-                label_map = {name: idx for idx, name in enumerate(id2label)}
+                label_map = {name: idx for idx, name in enumerate(features[label_column].feature.names)}
             else:
-                # Try to create label map manually if not found in the dataset features
-                logger.info(f'Label map was not found in the original dataset. Trying to create label map manually...')
+                # Create label map manually if not found
+                logger.info('Label map not found. Creating manually...')
                 unique_labels = set()
-                for split in dataset.keys() if isinstance(dataset, DatasetDict) else [dataset]:
-                    for label_list in dataset[split][label_column] if isinstance(dataset, DatasetDict) else dataset[label_column]:
-                        for label in label_list:
-                            main_label = label.split('-')[-1] if isinstance(label, str) else str(label)
-                            unique_labels.add(main_label)
-                unique_labels = sorted(unique_labels, key=int)
-                label_map = {label: idx for idx, label in enumerate(unique_labels)}
+                label_data = dataset[label_column] if isinstance(dataset, Dataset) else [dataset[split][label_column]
+                                                                                         for split in dataset]
+                for label_list in label_data:
+                    unique_labels.update(
+                        label.split('-')[-1] if isinstance(label, str) else str(label) for label in label_list)
+                label_map = {label: idx for idx, label in enumerate(sorted(unique_labels, key=int))}
 
         logger.info(f"Label map: {label_map}")
 
-        # Modify the label map to remove BIO encoding
+        # Remove BIO encoding from the label map
         span_label_map = {}
         for label in label_map:
             main_label = label.split('-')[-1] if isinstance(label, str) else label

@@ -26,8 +26,8 @@ class HScore:
 
         # Number of samples, hidden size (i.e. embedding length), number of classes
         num_samples, hidden_size = embeddings.size()
-        classes, class_counts = torch.unique(labels)
-        num_classes = classes.shape(0)
+        classes, class_counts = torch.unique(labels, return_counts=True)
+        num_classes = len(classes)
 
         # Feature covariance matrix (hidden_size x hidden_size)
         cov_matrix = torch.mm(embeddings.T, embeddings) / num_samples

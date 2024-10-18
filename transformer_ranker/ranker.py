@@ -212,6 +212,6 @@ class TransformerRanker:
         }
 
         estimator = estimator_classes[estimator]
-        score = estimator.fit(features=embeddings, labels=labels)
+        score = estimator.fit(embeddings=embeddings, labels=labels)
 
         return round(score, 4)
