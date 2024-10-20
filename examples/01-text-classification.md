@@ -1,13 +1,13 @@
 # Text Classification
 
-This markdown explains how to use the library to choose the best-suited language model for text classification datasets.
+This example shows how to use the library to choose the best-suited language model for text classification datasets.
 We will load a sample dataset and rank 17 models using transferability metrics.
 Let's follow these steps:
 
 1. [Loading Datasets](#1-loading-and-inspecting-datasets): Load a text classification dataset using the Datasets library.
 2. [Preparing Language Models](#2-preparing-language-models): Choose from our 17 language models, or create your own custom list.
 3. [Ranking Language Models](#3-ranking-language-models): Rank the selected models on a downsampled part (20%) of the dataset.
-4. [Interpreting Results](#4-result-interpretation): Review the scores to find the best-suited model, offering a good starting point for fine-tuning.
+4. [Interpreting Results](#4-result-interpretation): Check transferability scores to select the best-suited model for fine-tuning.
 
 <details>
 <summary>
@@ -49,8 +49,8 @@ pip install transformer-ranker
 Use Hugging Face’s Datasets library to load and access various text datasets.
 You can explore datasets in the [text classification](https://huggingface.co/datasets?task_categories=task_categories:text-classification&sort=trending) section on Hugging Face.
 
-In this example, we use the TREC question classification dataset, which groups questions by type of information asked.
-It comes with coarse and fine-grained question categories:
+In this example, we use the TREC question classification dataset, which categorizes questions based on the type of information they seek.
+It comes with coarse and fine-grained question classes:
 
 - **Coarse-grained classes:** Six broad categories, including descriptions, entities, abbreviations, humans, locations, and numeric values. For example, the question _"What is a Devo hat?"_ falls under the coarse class DESC (description and abstract concept).
 - **Fine-grained classes:** Splits broad categories into 50 subclasses, where the question _"What is a Devo hat?"_ belongs to a finer class, DESC:def (definition).
@@ -108,8 +108,8 @@ The `language_models` list contains identifiers for each model:
 ['distilbert-base-cased', 'typeform/distilroberta-base-v2', 'bert-base-cased', 'SpanBERT/spanbert-base-cased', 'roberta-base']
 ```
 
-We recommend trying models with different pretraining tasks (e.g., masked language modeling, replaced token detection, sentence transformers)
-or models trained on diverse data (e.g., multilingual or domain-specific models).
+Feel free to create your own list of models. 
+We suggest exploring models that vary in pretraining tasks (e.g., masked language modeling, replaced token detection or sentence transformers) and those trained on different types of data (e.g., multilingual or domain-specific models).
 
 ## 3. Ranking Language Models
 
@@ -123,9 +123,9 @@ ranker = TransformerRanker(dataset, dataset_downsample=0.2)
 ```
 
 Key parameters to consider:
-- `dataset_downsample` (0.2): Reduces dataset size for faster ranking. The ranker will log the reduced number of texts as: _"Dataset size: 1190 for TREC (downsampled to 0.2)"_.
-- `text_column` (optional): The name of the column containing texts (e.g. sentences, documents, words).
-- `label_column` (optional): The name of the column for labels. Labels can be strings, integers, or floats for regression tasks. For TREC’s fine-grained categories, set this to `label_column=fine_label`.
+- `dataset_downsample` (0.2): Reduces the dataset size to speed up ranking. The ranker will log the dataset size as: _"Dataset size: 1190 for TREC (downsampled to 0.2)"_.
+- `text_column` (optional): Specifies the column that contains the text (e.g., sentences, documents, words).
+- `label_column` (optional): Specifies the column for labels. Labels can be strings, integers, or floats for regression tasks. For fine-grained categories in TREC, use `label_column=fine_label`.
 - `text_pair_column` (optional): For tasks that involve text pairs, specify the second text column.
 
 Run the ranker with your list of language models:
@@ -135,7 +135,7 @@ results = ranker.run(language_models, batch_size=64)
 print(results)
 ```
 
-- `batch_size` (64): Sets how many texts are processed per batch during embedding. Since models aren't fine-tuned, larger batch sizes (e.g., 64 or 128) can be used. If memory issues occur, reduce the batch size.
+- `batch_size` (64): Since models aren't fine-tuned, larger batch sizes (e.g., 64 or 128) can be used. If you run into memory problems, lower the batch size.
 
 <details>
 <summary>

@@ -1,10 +1,8 @@
 # Examples
 
-This directory shows what the library can do.
-It includes examples for loading different datasets, choosing language models, and ranking them.
-The library has two main goals: (1) rank language models quickly and effectively, and (2) make the repository easy to use, promoting less fine-tuning.
-Most examples are short (just 6 lines of code) but come with detailed explanations.
-Here’s a list of available examples and bonus material:
+This directory provides examples for loading different datasets, choosing language models, and ranking them.
+The library has two main goals: to rank language models quickly and effectively, and to make the repository easy to use, promoting less fine-tuning.
+Most examples are short, just 6 lines of code, but come with detailed explanations:
 
 1. [Rank Language Models for Text Classification](https://github.com/flairNLP/transformer-ranker/blob/main/examples/01-text-classification.md)
 2. [Rank Language Models for Sequence Labeling](https://github.com/flairNLP/transformer-ranker/blob/main/examples/02-sequence-labeling.md)
@@ -13,7 +11,7 @@ Here’s a list of available examples and bonus material:
 
 # Quick Summary
 
-This library works as an add-on for [Transformers](https://github.com/huggingface/transformers) and uses PyTorch.
+This library works as an add-on for [Transformers](https://github.com/huggingface/transformers) and relies on PyTorch.
 The only requirements are those two libraries, assuming you’ve already set up your Python environment.
 To use the latest version, clone the repository and install the dependencies:
 
@@ -220,7 +218,7 @@ layerwise scores: {-1: 2.7377, -2: 2.8024, -3: 2.8312, -4: 2.8270, -5: 2.8293, -
 
 ## Important notes
 
-__Inspect the dataset__ It is good to double-check the dataset structure before continuing. Make sure it includes both texts and labels.
+__Inspect the dataset__ Check the dataset before using it in the ranker. Make sure it has both texts and labels. 
 
 __Dataset downsampling__ Set the `dataset_downsample` ratio based on the dataset size. Try not to downsample too much, especially if you're working with small datasets that have lots of classes. It’s recommended to have at least 1000 text instances.
 

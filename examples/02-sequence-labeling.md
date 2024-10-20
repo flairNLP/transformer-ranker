@@ -1,13 +1,13 @@
 # Sequence Labeling - PoS and NER
 
-This markdown shows how to rank language models for two sequence labeling tasks: Part-of-Speech tagging (PoS) and Named Entity Recognition (NER).
+This example shows how to rank language models for two sequence labeling tasks: Part-of-Speech tagging (PoS) and Named Entity Recognition (NER).
 We will load two token classification datasets and rank 17 language models using _transferability metrics_ to find the best-suited ones.
 Let's break it down into steps:
 
-1. [Loading Datasets](#1-loading-and-inspecting-datasets): Load a two token classification datasets using the Datasets library.
+1. [Loading Datasets](#1-loading-and-inspecting-datasets): Load two token classification datasets using the Datasets library.
 2. [Preparing Language Models](#2-preparing-language-models): Choose from 17 language models, or create your own custom list.
 3. [Ranking Language Models](#3-ranking-language-models): Rank models for English PoS (Universal Dependencies) and NER (WNUT_17).
-4. [Interpreting Results](#4-result-interpretation): Review the scores to select the best-suited model for each dataset.
+4. [Interpreting Results](#4-result-interpretation): Review transferability scores to select the best-suited model for each dataset.
 
 <details> <summary>Complete code for ranking language models on UD's 'en_lines'<br> </summary>
 
@@ -46,7 +46,7 @@ pip install transformer-ranker
 
 ## 1. Loading and Inspecting Datasets
 
-For this example, we use two token classification datasets. Most of such datasets have sentences as lists of words, where each has a label.
+In this example, we use two token classification datasets. These datasets consist of sentences as lists of words, where each word has a label.
 
 - **Part-of-Speech Tagging** A dataset from Universal Dependencies (UD) containing English subtitles annotated with parts of speech.
 - **Named Entity Recognition** The WNUT_17 dataset, which features Twitter data annotated for entity recognition.
@@ -91,7 +91,7 @@ from transformer_ranker import prepare_popular_models
 language_models = prepare_popular_models('base')
 ```
 
-Or use a custom list. It's a good idea to try models pretrained on different data or with different pretraining tasks.
+Or try using a custom list. We recommend adding models trained on different data or with different pretraining tasks.
 
 ```python3
 
@@ -104,7 +104,7 @@ language_models = [
 
 ## 3. Ranking Language Models
 
-Initialize the ranker with the dataset, specifying the text and label columns to ensure they're detected correctly.
+Initialize the ranker with the dataset and specify text and label columns.
 Next, run the ranking using your list of language models.
 
 #### For PoS Tagging
@@ -199,4 +199,4 @@ This markdown showed how to use `transformer-ranker` to choose the best-suited m
 We loaded token classification datasets, selected language models, and ranked them based on transferability scores.
 The result is a list of model names with transferability scores, helping you choose which to fine-tune or skip.
 
-To fine-tune the top-ranked model, you can use either the Flair or Transformers framework.
+To fine-tune the top-ranked model, you can use Flair or Transformers frameworks.

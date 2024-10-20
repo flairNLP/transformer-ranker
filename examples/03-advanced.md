@@ -2,32 +2,31 @@
 
 _How is the suitability of language models estimated?_
 
-The suitability of language models is determined by evaluating the alignment of their embeddings with a specific downstream task.
-This evaluation can be done in advance, without changing the model’s weights.
-Embeddings are extracted from different layers of the model and scored using a lightweight method that is both fast and does not require additional training.
-The goal is to rank the models in an order that closely matches their true performance after fine-tuning.
+Language models are evaluated by how well their embeddings match a specific downstream task, without adjusting the model's weights.
+Embeddings from different layers are scored using a fast, lightweight method that doesn't need extra training.
+The goal is to rank the models to predict their performance after fine-tuning.
 
 ### How it works
 
-Estimating language model's transferability has two main steps. These steps are repeated for each language model. 
+Estimating a language model's transferability involves two steps, repeated for each model:
 
-1. **Extract embeddings**: The model is treated as a fixed feature extractor. Its weights remain unchanged, and we collect embeddings from various layers through forward passes.
-2. **Score embeddings**: The embeddings are evaluated using estimators to assess how well they align with the target task.
+1. **Extract embeddings**: The model acts as a fixed feature extractor. Its weights remain unchanged, and embeddings from different layers are collected during forward passes.
+2. **Score embeddings**: The embeddings are scored with estimators to measure how well they fit the target task.
 
 ### Estimation Methods
 
 The library provides three methods for estimating transferability:
 
 - _k-Nearest Neighbors (k-NN)_: Uses distance metrics (e.g., Euclidean distance) to measure how closely embeddings from the same class are clustered. We mimic 1-fold cross-validation by calculating pairwise distances and excluding self-distances in the top _k_ search. [See k-NN code here](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/nearestneighbors.py).
-- _H-score_: Measures the feature-wise variance between embeddings of different classes. High variance with low redundancy suggests strong transferability. [See H-score code here](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/hscore.py).
-- _LogME_: Calculates the marginal likelihood of a linear model fitted to the embeddings without actual training. It optimizes two parameters (alpha and beta) to provide a score reflecting the alignment of embeddings with the task. [See LogME code here](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/logme.py).
+- _H-score_: Measures the feature-wise variance between embeddings of different classes. High variance with low feature redundancy suggests strong transferability. [See H-score code here](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/hscore.py).
+- _LogME_: Computes the marginal likelihood of a linear model fitted to the embeddings without actual training. It optimizes two parameters (alpha and beta) to provide a score reflecting the alignment of embeddings with the task. [See LogME code here](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/logme.py).
 
-We use two trusted metrics, LogME and H-score (shrinkage-based version). More metrics are out there, so there might be room for improvement!
+We rely on two state-of-the-art metrics: LogME and H-score (with shrinkage-based improvements). More metrics are out there, so there might be room for improvement!
 
 ### Applicability of Metrics
 
-These metrics are primarily for classification tasks.
-For text pair tasks like entailment, the problem is treated as classification by concatenating two sentences with a separator token.
+These metrics are mainly for classification tasks.
+For text pair tasks like entailment, the problem is handled as classification by combining two sentences with a separator token.
 For regression tasks, only LogME is recommended.
 
 | **Transferability Metric** | **Classification** | **Regression** | **Generation** |
@@ -36,7 +35,7 @@ For regression tasks, only LogME is recommended.
 | H-score                    | ✓                  | ✗              | ✗              |
 | LogME                      | ✓                  | ✓              | ✗              |
 
-To choose a different transferability metric, use the `estimator` parameter when running the ranker:
+To use a different transferability metric, set the `estimator` parameter when running the ranker:
 
 ```python3
 result = ranker.run(language_models, estimator="logme")
@@ -58,15 +57,14 @@ result = ranker.run(language_models, estimator="logme", layer_aggregator="bestla
 
 # Layerwise Analysis
 
-The _bestlayer_ option is useful even for a single language model, as it shows transferability scores for each layer.
-It can be helpful to quickly inspect how well is each layer suited for your dataset.
-To add, this indicates which layers separate the classes in your dataset better. 
+The `bestlayer` option is helpful even for a single model, as it shows transferability scores for each layer.
+This allows you to quickly see how well each layer works for your dataset, indicating which layers best separate the classes.
 
 ### Example: deberta-v2-xxlarge X CoNLL (NER)
 
-As an example, let's use the DeBERTa-xxlarge model and run the best layer search on the CoNLL (NER) dataset.
+For example, you can use the DeBERTa-xxlarge model and run the best layer search on the CoNLL (NER) dataset.
 The goal is to identify which layer's embeddings best separate four entity classes.
-This can be done by loading a single language model and setting the `layer_aggregator='bestlayer'` parameter when running the ranker.
+You can do this by loading the model and setting `layer_aggregator='bestlayer'` when running the ranker.
 
 ```python3
 from datasets import load_dataset
@@ -87,8 +85,8 @@ result = ranker.run(models=language_model, layer_aggregator='bestlayer')
 
 ### Results
 
-Each layer’s score will be logged, and the highest-ranking layer will indicate the best layer for the task.
-The layer -41 (7th from the bottom) offers the best separation for the four entities:
+Each layer's score is logged, and the highest one shows the best layer for the task.
+Layer -41 (7th from the bottom) provides the best separation for the four entities.
 
 ```bash
 INFO:transformer_ranker.ranker:microsoft/deberta-v2-xxlarge, score: 2.8912 (layer -41)
@@ -97,19 +95,18 @@ layerwise scores: {-1: 2.7377, -2: 2.8024, -3: 2.8312, -4: 2.8270, -5: 2.8293, -
 
 ### Efficiency
 
-Layer ranking is computationally efficient. 
-The dataset is embedded once, and each hidden state is scored independently (_n_ estimations for _n_ transformer layers). 
-Since the estimators are lightweight, scoring models with many layers is quick.
+Layer ranking is computationally efficient.
+The dataset is embedded once, and each hidden state is scored independently (_n_ estimations for _n_ transformer layers).
+Since the estimators are lightweight, scoring models with many layers is fast.
 
-In the DeBERTa-xxlarge example, evaluating 48 layers took 1.5 minutes, including embedding and scoring (_embedding time_: 52 seconds, _scoring 48 layers_: 33 seconds).
-The process involves extracting embeddings in a single pass and scoring each layer independently.
-We used a GPU-enabled (A100) Colab Notebook.
+For DeBERTa-xxlarge (48 layers), the whole process took 1.5 minutes: 52 seconds for embedding and 33 seconds for scoring.
+This was done on a GPU-enabled (A100) Colab Notebook.
 
 ### Why not just train a linear probe?
 
-Training a linear layer can be an alternative to using estimators, but it has two shortcomings:
+Training a linear layer can be an alternative to estimators, but it has two downsides:
 
-- Slower runtime: Training a linear layer is slower than calculating transferability metrics, especially for large models with many layers (e.g., 48 layers).
+- Slower runtime: It's slower than using transferability metrics, especially for large models with many layers (like 48 layers)
 - Hyperparameter search: Training requires tuning parameters like learning rate, batch size, and number of epochs, while metrics like H-score don't have any hyperparameters.
 
 <details> <summary> Training a linear probe on DeBERTa-xxlarge layers using CoNLL <br> </summary>
@@ -172,15 +169,12 @@ The layerwise scores of linear probing strongly correlate with H-scores.
 
 </details>
 
-
 ## Summary
 
-Here we explained how the transferability of language models is estimated.
-It requires to embed the dataset through a language model once and then score the embeddings using transferability metrics. 
-Choosing the estimator can be done by changing the 'estimator' parameter.
-These metrics are applicable for classification and regression tasks. 
+We explained how to estimate the transferability of language models. 
+The process involves embedding the dataset once through the model, then scoring the embeddings using transferability metrics.
+You can choose the metric by setting the `estimator` parameter.
 
-To answer which layers' embeddings result in best rankings, we offer three methods for layer selection.
-The 'bestlayer' option is useful even when inspecting a single language model.
-Given efficient implementation, we can quickly score each layer of a language model.
-This gives insights of how different layers separate the embeddings for your classification tasks.
+The library offers three options for pooling embeddings from different layers using `layer_aggregator` parameter.
+The `layer_aggregator='bestlayer'` option is useful even when inspecting a single model.
+By quickly scoring each layer, it offers valuable insights into how well different layers separate embeddings for your classification tasks.
