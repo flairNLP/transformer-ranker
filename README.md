@@ -147,6 +147,14 @@ downloading the models if you don't already have them locally).
 
 
 
+## Tutorials
+
+We provide **tutorials** to provide an introduction into the library and key concepts:
+
+1. [**Tutorial 1: Walkthrough**](examples/01-text-classification.md)
+2. [**Tutorial 2: Sequence Labeling**](examples/02-sequence-labeling.md)
+3. [**Tutorial 3: More NLP Tasks**](examples/03-advanced.md)
+
 ## Cite
 
 Please cite the following [paper](https://arxiv.org/abs/2409.05997) when using TransformerRanker or building upon our work:
@@ -163,10 +171,13 @@ Please cite the following [paper](https://arxiv.org/abs/2409.05997) when using T
 }
 ```
 
+## Contact
+
+Please email your questions or comments to [**Lukas Garbas**](mailto:lukasgarba@gmail.com?subject=[GitHub]%20TransformerRanker)
+
 ## Contributing
 
 Thanks for your interest in contributing! There are many ways to get involved;
-start with our [contributor guidelines](docs/how_to_contribute.md) and then
 check these [open issues](https://github.com/flairNLP/fundus/issues) for specific tasks.
 
 ## License
