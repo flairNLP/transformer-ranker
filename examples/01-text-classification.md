@@ -1,18 +1,21 @@
-# Text Classification
+# Walkthrough
 
-This example shows how to use the library to choose the best-suited language model for text classification datasets.
-We will load a sample dataset and rank 17 models using transferability metrics.
-Let's follow these steps:
+In this tutorial, we do a walkthrough of the main concepts and parameters in TransformerRanker. 
 
-1. [Loading Datasets](#1-loading-and-inspecting-datasets): Load a text classification dataset using the Datasets library.
-2. [Preparing Language Models](#2-preparing-language-models): Choose from our 17 language models, or create your own custom list.
-3. [Ranking Language Models](#3-ranking-language-models): Rank the selected models on a downsampled part (20%) of the dataset.
-4. [Interpreting Results](#4-result-interpretation): Check transferability scores to select the best-suited model for fine-tuning.
+Generally, finding the best LM for a specific task involves the following four steps: 
 
-<details>
-<summary>
-Complete code for ranking language models on TREC<br>
-</summary>
+1. [Loading Datasets](#Step-1.-Load-the-Dataset): Each task has a dataset. Load it from the Datasets library.
+2. [Preparing Language Models](#2-preparing-language-models): TransformerRanker requires a list of options to rank. 
+In the second step, you provide a list of all LMs that you want to rank. 
+3. [Ranking Language Models](#3-ranking-language-models): Once the dataset and LM options are provided, you can now execute the ranking.
+4. [Interpreting Results](#4-result-interpretation): When ranking is complete, you can select the best-suited model(s).
+
+We now look at each of these steps in detail.
+
+## Example Task 
+
+For this tutorial, we use the example task of text classification over the classic TREC dataset. Our goal is
+to find the best-suited language model. The full code for ranking LMs on TREC is:
 
 ```python3
 from datasets import load_dataset
@@ -34,20 +37,12 @@ results = ranker.run(language_models, batch_size=64)
 print(results)
 ```
 
-</details>
 
-## Setup and Installation
-
-First, make sure Python 3.8 or later is installed. Install the ranker package using pip:
-
-```
-pip install transformer-ranker
-```
-
-## 1. Loading and Inspecting Datasets
+## Step 1. Load the Dataset
 
 Use Hugging Face’s Datasets library to load and access various text datasets.
 You can explore datasets in the [text classification](https://huggingface.co/datasets?task_categories=task_categories:text-classification&sort=trending) section on Hugging Face.
+You load a dataset by passing its string identified.
 
 In this example, we use the TREC question classification dataset, which categorizes questions based on the type of information they seek.
 It comes with coarse and fine-grained question classes:
@@ -86,11 +81,11 @@ Key details to note:
 - __Dataset size__: Check the number of texts (around 6,000). This will help set a good `dataset_downsample` ratio for ranking.
 - __Text and label columns__: Ensure the dataset includes texts and labels. Some datasets might be incomplete due to the absence of quality control during uploads. TREC has _'text'_, _'coarse_label'_, and _'fine_label'_ columns, making it ready for text classification.
 
-## 2. Preparing Language Models
+## Step 2. Compile a List of Language Models
 
 Next, prepare a list of language models to assess for the downstream task.
 You can choose any models from the [model hub](https://huggingface.co/models).
-If unsure where to start, use the predefined list of popular models:
+If unsure where to start, use our predefined list of popular models:
 
 ```python3
 from transformer_ranker import prepare_popular_models
@@ -104,42 +99,40 @@ print(language_models[:5])
 
 The `language_models` list contains identifiers for each model:
 
-```bash
+```console
 ['distilbert-base-cased', 'typeform/distilroberta-base-v2', 'bert-base-cased', 'SpanBERT/spanbert-base-cased', 'roberta-base']
 ```
 
 Feel free to create your own list of models. 
 We suggest exploring models that vary in pretraining tasks (e.g., masked language modeling, replaced token detection or sentence transformers) and those trained on different types of data (e.g., multilingual or domain-specific models).
 
-## 3. Ranking Language Models
+## 3. Rank LMs
 
-With the dataset and models ready, the next step is ranking.
-Initialize the ranker with your dataset and set any dataset-specific parameters (e.g., downsampling ratio):
+You have now selected a task with its dataset (TREC) and a list of LMs to rank. 
+
+In most cases, you can use our ranker with the default parameters. Often, it is more efficient to downsample the
+data a bit to speed up ranking: 
 
 ```python3
 from transformer_ranker import TransformerRanker
 
+# initialize ranker with dataset
 ranker = TransformerRanker(dataset, dataset_downsample=0.2)
-```
 
-Key parameters to consider:
-- `dataset_downsample` (0.2): Reduces the dataset size to speed up ranking. The ranker will log the dataset size as: _"Dataset size: 1190 for TREC (downsampled to 0.2)"_.
-- `text_column` (optional): Specifies the column that contains the text (e.g., sentences, documents, words).
-- `label_column` (optional): Specifies the column for labels. Labels can be strings, integers, or floats for regression tasks. For fine-grained categories in TREC, use `label_column=fine_label`.
-- `text_pair_column` (optional): For tasks that involve text pairs, specify the second text column.
-
-Run the ranker with your list of language models:
-
-```python3
+# run the ranker over the list of language models
 results = ranker.run(language_models, batch_size=64)
 print(results)
 ```
 
-- `batch_size` (64): Since models aren't fine-tuned, larger batch sizes (e.g., 64 or 128) can be used. If you run into memory problems, lower the batch size.
+In this example, we downsampled the data to 20% and are running the ranker with a batch size of 64. You can modify these
+two parameters: 
+- `dataset_downsample`: Set it to 1. to estimate over the full dataset. Or lower than 0.2 to make an estimation even faster. 
+We found that downsampling to 20% often does not hurt estimation performance.
+- `batch_size`: Set it higher or lower depending on your GPU memory. Only big GPUs can handle a large batch size.
 
 <details>
 <summary>
-<em>Note</em>: Different-sized models may need different batch sizes.<br>
+<em>Advanced</em>: Different-sized models may need different batch sizes.<br>
 </summary>
 
 ```python3
@@ -168,6 +161,31 @@ print(result)
 
 </details>
 
+### Optional: Specifying Labels
+
+***Note:*** TREC has two sets of labels (fine-grained and coarse-grained). By default, TransformerRanker heuristically 
+determines, which field in the dataset is the label to use in ranking. In the care of TREC, it 
+uses the coarse-grained labels. 
+
+But you can also directly indicate which field to use as labels by passing the `label_column`.
+For instance, if you want to find 
+the best LM for fine-grained question classification, use the following code: 
+
+```python3
+from transformer_ranker import TransformerRanker
+
+# initialize ranker with dataset and indicate the label column
+ranker = TransformerRanker(dataset, label_column='fine_label', dataset_downsample=0.2)
+
+# run the ranker over the list of language models
+results = ranker.run(language_models, batch_size=64)
+print(results)
+```
+
+
+
+### Running the Ranker
+
 The ranker logs steps to help you understand what happens as it runs.
 It iterates over each model and (1) embeds texts, (2) scores embeddings using an estimator.
 Logs show which model is currently being assessed.
@@ -195,7 +213,7 @@ We used a GPU-enabled Colab Notebook with a Tesla T4.
 Keep in mind that TREC has short questions, averaging about 10 words each.
 For longer documents, embedding and scoring takes more time.
 
-## 4. Result Interpretation
+## 4. Interpret the Results
 
 The results are sorted in descending order.
 Transferability scores show how well each model suits your task.
