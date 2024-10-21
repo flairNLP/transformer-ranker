@@ -1,0 +1,47 @@
+name: Tests
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+    - "examples/**"
+    - ".gitignore"
+    - "README.md"
+    - "LICENSE"
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore:
+    - "examples/**"
+    - ".gitignore"
+    - "README.md"
+    - "LICENSE"
+jobs:
+  run:
+    name: "Run Tests"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Set up pip cache
+      if: runner.os == 'Linux'
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+    - name: Install package
+      run: pip install -e .
+    - name: Install pytest
+      run: pip install pytest
+    - name: Print Package Versions
+      run: pip freeze
+    - name: Tests
+      run: pytest
