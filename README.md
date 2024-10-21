@@ -147,6 +147,27 @@ downloading the models if you don't already have them locally).
 
 
 
+## Cite
+
+Please cite the following [paper](https://arxiv.org/abs/2409.05997) when using TransformerRanker or building upon our work:
+
+```bibtex
+@misc{garbas2024transformerrankertoolefficientlyfinding,
+      title={TransformerRanker: A Tool for Efficiently Finding the Best-Suited Language Models for Downstream Classification Tasks}, 
+      author={Lukas Garbas and Max Ploner and Alan Akbik},
+      year={2024},
+      eprint={2409.05997},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2409.05997}, 
+}
+```
+
+## Contributing
+
+Thanks for your interest in contributing! There are many ways to get involved;
+start with our [contributor guidelines](docs/how_to_contribute.md) and then
+check these [open issues](https://github.com/flairNLP/fundus/issues) for specific tasks.
 
 ## License
 
