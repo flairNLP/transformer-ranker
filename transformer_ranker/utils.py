@@ -1,6 +1,7 @@
 import logging
 import warnings
 from transformers import logging as transformers_logging
+import operator
 
 from typing import List, Dict
 
@@ -95,8 +96,8 @@ class Result:
         param metric: metric name (e.g. "hscore", or "logme")
         """
         self.metric = metric
-        self._results = {}
-        self.layer_estimates = {}
+        self._results: Dict[str, float] = {}
+        self.layer_estimates: Dict[str, Dict[int, float]] = {}
 
     @property
     def results(self) -> Dict[str, float]:
@@ -115,9 +116,9 @@ class Result:
         return {k: self.results[k] for k in list(self.results.keys())[:3]}
 
     @property
-    def best_layers(self) -> Dict[str, str]:
+    def best_layers(self) -> Dict[str, int]:
         """Return a dictionary with model name: best layer id"""
-        return {model: max(values, key=values.get) for model, values in self.layer_estimates.items()}
+        return {model: max(values.items(), key=operator.itemgetter(1))[0] for model, values in self.layer_estimates.items()}
 
     def add_score(self, model_name, score) -> None:
         self._results[model_name] = score

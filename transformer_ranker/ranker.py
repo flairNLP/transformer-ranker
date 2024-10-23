@@ -79,28 +79,25 @@ class TransformerRanker:
         # Load all transformers into hf cache for later use
         self._preload_transformers(models)
 
-        device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         labels = self.data_handler.prepare_labels(self.dataset)
-        labels = labels.to(device) if gpu_estimation else labels
 
         result_dictionary = Result(metric=estimator)
 
         # Iterate over each transformer model and score it
-        for model_id, model_name in enumerate(models):
+        for model in models:
 
             # Select transformer layers to be used: last layer (i.e. output layer) or all of the layers
             layer_ids = "-1" if layer_aggregator == "lastlayer" else "all"
             layer_pooling = "mean" if "mean" in layer_aggregator else None
 
             # Sentence pooling is only applied for text classification tasks
-            sentence_pooling = None if self.task_type == "word classification" else sentence_pooling
+            effective_sentence_pooling = None if self.task_type == "word classification" else sentence_pooling
 
             embedder = Embedder(
-                model=model_name,
+                model=model,
                 layer_ids=layer_ids,
                 layer_pooling=layer_pooling,
-                sentence_pooling=sentence_pooling,
+                sentence_pooling=effective_sentence_pooling,
                 device=device,
                 **kwargs
             )
@@ -117,9 +114,13 @@ class TransformerRanker:
                 embeddings = [word_embedding for sentence_embedding in embeddings
                               for word_embedding in sentence_embedding]
 
-            layer_ids = embedder.layer_ids
+            embedded_layer_ids = embedder.layer_ids
+            model_name = embedder.model_name
             num_layers = embeddings[0].size(0)
             layer_scores = []
+
+            if gpu_estimation:
+                labels = labels.to(embedder.device)
 
             # Remove transformer model from memory after embeddings are extracted
             del embedder
@@ -129,7 +130,7 @@ class TransformerRanker:
             tqdm_bar_format = '{l_bar}{bar:10}{r_bar}{bar:-10b}'
             for layer_id in tqdm(range(num_layers), desc="Estimating Performance", bar_format=tqdm_bar_format):
                 # Get the position of the layer index
-                layer_index = layer_ids[layer_id]
+                layer_index = embedded_layer_ids[layer_id]
 
                 # Stack embeddings for that layer
                 layer_embeddings = torch.stack([word_embedding[layer_index] for word_embedding in embeddings])
@@ -142,7 +143,7 @@ class TransformerRanker:
                 layer_scores.append(score)
 
             # Store scores for each layer in the result dictionary
-            result_dictionary.layer_estimates[model_name] = dict(zip(layer_ids, layer_scores))
+            result_dictionary.layer_estimates[model_name] = dict(zip(embedded_layer_ids, layer_scores))
 
             # Aggregate scores for each layer
             if layer_aggregator in ["layermean", "lastlayer"]:

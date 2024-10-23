@@ -1,3 +1,4 @@
+from typing import Optional
 import torch
 
 
@@ -10,14 +11,14 @@ class LogME:
         :param regression: Boolean flag if the task is regression.
         """
         self.regression = regression
-        self.score = None
+        self.score: Optional[float] = None
 
     def fit(
         self,
         embeddings: torch.Tensor,
         labels: torch.Tensor,
-        alpha: float = 1.0,
-        beta: float = 1.0,
+        initial_alpha: float = 1.0,
+        initial_beta: float = 1.0,
         max_iter: int = 11,
         tol: float = 1e-3
     ) -> float:
@@ -49,6 +50,9 @@ class LogME:
 
         evidence_sum = 0.0
 
+        # Start with initial alpha and beta values
+        alpha, beta = torch.tensor(initial_alpha), torch.tensor(initial_beta)
+
         # Loop over each class (for classification) or each target column (for regression)
         for i in range(num_classes):
             # For classification create a one-hot vector, for regression, use the corresponding column of labels
@@ -64,9 +68,6 @@ class LogME:
 
             residual_error = torch.tensor(0.0)
             precision_weighted_sum = torch.tensor(0.0)
-
-            # Start with initial alpha and beta values
-            alpha, beta = torch.tensor(alpha), torch.tensor(beta)
 
             # Iteratively update alpha and beta until convergence or maximum iterations
             for _ in range(max_iter):
