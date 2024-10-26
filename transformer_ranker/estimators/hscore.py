@@ -58,7 +58,7 @@ class HScore:
             class_means[i] = class_features * torch.sqrt(mask.sum())
 
         # Covariance for class-conditioned means
-        covg = torch.mm(class_means.T, class_means) / num_samples
+        covg = torch.mm(class_means.T, class_means) / (num_samples - 1)
 
         # Shrinkage-based H-score
         hscore = torch.trace(torch.mm(pinv_covf_alpha, (1 - shrinkage) * covg)).item()

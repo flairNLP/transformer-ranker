@@ -5,7 +5,7 @@ from tokenizers.pre_tokenizers import Whitespace
 from .utils import configure_logger
 
 import logging
-from typing import List, Dict, Optional, Union, Tuple, Any
+from typing import List, Dict, Optional, Set, Union, Tuple, Type
 
 
 logger = configure_logger('transformer_ranker', logging.INFO)
@@ -123,7 +123,7 @@ class DatasetCleaner:
         self.log_dataset_info(dataset)
 
         # Simplify the dataset: keep only relevant columns
-        keep_columns = [self.text_column, self.text_pair_column, self.label_column]
+        keep_columns = [col for col in (self.text_column, self.text_pair_column, self.label_column) if col is not None]
         dataset = self._remove_columns(dataset, keep_columns=keep_columns)
 
         return dataset
@@ -147,7 +147,7 @@ class DatasetCleaner:
 
     @staticmethod
     def _find_text_and_label_columns(dataset: Dataset, text_column: Optional[str] = None,
-                                     label_column: Optional[str] = None) -> Tuple[str, str, type[Any]]:
+                                     label_column: Optional[str] = None) -> Tuple[str, str, Type]:
         """Determine text and label columns in hf datasets based on popular keywords"""
         # A list of mostly used column names for texts
         text_columns = [
@@ -186,7 +186,7 @@ class DatasetCleaner:
         return dataset
 
     @staticmethod
-    def _find_task_type(label_column: str, label_type: Union[type(int), type(str), type(list), type(float)]) -> str:
+    def _find_task_type(label_column: str, label_type: Union[Type[int], Type[str], Type[list], Type[float]]) -> str:
         """Determine task type based on the label column's data type."""
         label_type_to_task_type = {
             int: "sentence classification",  # labels can be integers
@@ -214,11 +214,9 @@ class DatasetCleaner:
         return dataset
 
     @staticmethod
-    def _merge_data_splits(dataset: Union[DatasetDict, List[Dataset]]) -> Dataset:
+    def _merge_data_splits(dataset: DatasetDict) -> Dataset:
         """Merge DatasetDict into a single dataset."""
-        datasets_to_merge = [dataset[split] for split in dataset.keys()]
-        merged_dataset = datasets.concatenate_datasets(datasets_to_merge)
-        return merged_dataset
+        return datasets.concatenate_datasets(list(dataset.values()))
 
     @staticmethod
     def _remove_empty_rows(dataset: Dataset, text_column: str, label_column: str) -> Dataset:
@@ -285,7 +283,7 @@ class DatasetCleaner:
             else:
                 # Create label map manually if not found
                 logger.info('Label map not found. Creating manually...')
-                unique_labels = set()
+                unique_labels: Set[str] = set()
                 label_data = dataset[label_column] if isinstance(dataset, Dataset) else [dataset[split][label_column]
                                                                                          for split in dataset]
                 for label_list in label_data:
@@ -296,7 +294,7 @@ class DatasetCleaner:
         logger.info(f"Label map: {label_map}")
 
         # Remove BIO encoding from the label map
-        span_label_map = {}
+        span_label_map: Dict[str, int] = {}
         for label in label_map:
             main_label = label.split('-')[-1] if isinstance(label, str) else label
             if main_label not in span_label_map:

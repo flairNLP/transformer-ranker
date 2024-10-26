@@ -5,12 +5,14 @@ import torch
 from tqdm import tqdm
 from typing import Optional, List, Union
 
+from transformers import PreTrainedTokenizerFast
+
 
 class Embedder:
     def __init__(
         self,
         model: Union[str, torch.nn.Module],
-        tokenizer: Union[str, AutoTokenizer] = None,
+        tokenizer: Union[str, PreTrainedTokenizerFast, None] = None,
         layer_ids: str = "all",
         subword_pooling: str = "mean",
         layer_pooling: Optional[str] = None,
@@ -22,7 +24,7 @@ class Embedder:
         """
         Embed sentences using a pre-trained transformer model. It works at the word level, meaning each sentence
         is represented by a list of word vectors. You can pool these into a single sentence embedding if needed.
-        ♻️ Feel free to use it if you ever need a simple implementation for transformer embeddings.
+        ♻️  Feel free to use it if you ever need a simple implementation for transformer embeddings.
 
         :param model: Name of the model to be used. Either a model handle (e.g. 'bert-base-uncased')
         or a loaded model e.g. AutoModel('bert-base-uncased').
@@ -46,7 +48,16 @@ class Embedder:
             self.model_name = model
 
         # Load a model-specific tokenizer
-        self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(self.model_name, add_prefix_space=True)
+        self.tokenizer: PreTrainedTokenizerFast
+
+        if tokenizer is None:
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, add_prefix_space=True)
+
+        elif isinstance(tokenizer, str):
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer, add_prefix_space=True)
+
+        else:
+            self.tokenizer = tokenizer
 
         # Add padding token for models that do not have it (e.g. GPT2)
         if self.tokenizer.pad_token is None:
@@ -70,8 +81,12 @@ class Embedder:
         self.sentence_pooling = sentence_pooling
 
         # Set cpu or gpu device
-        self.device = (device if device else
-                       torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        else:
+            self.device = torch.device(device)
+        
         self.model = self.model.to(self.device)
 
     def tokenize(self, sentences):
@@ -153,10 +168,10 @@ class Embedder:
         for subword_embeddings, word_ids in zip(embeddings, word_ids):
 
             # Pool sub-words to get word-level embeddings
-            word_embeddings = self._pool_subwords(subword_embeddings, word_ids)
+            word_embedding_list = self._pool_subwords(subword_embeddings, word_ids)
 
             # Stack all word-level embeddings that represent a sentence
-            word_embeddings = torch.stack(word_embeddings, dim=0)
+            word_embeddings = torch.stack(word_embedding_list, dim=0)
 
             # Pool word-level embeddings into a single sentence vector if specified
             sentence_embedding = self._pool_words(word_embeddings) if self.sentence_pooling else word_embeddings
@@ -170,11 +185,11 @@ class Embedder:
 
         return sentence_embeddings
 
-    def _filter_layer_ids(self, layer_ids):
+    def _filter_layer_ids(self, layer_ids) -> List[int]:
         """Transform a string with layer ids into a list of ints and
          remove ids that are out of bound of the actual transformer size"""
         if layer_ids == "all":
-            layer_ids = ", ".join([str(-1 * (i + 1)) for i in range(self.num_transformer_layers)])
+            return [-i for i in range(1, self.num_transformer_layers + 1)]
 
         layer_ids = [int(number) for number in layer_ids.split(",")]
 
@@ -199,9 +214,9 @@ class Embedder:
     def _pool_subwords(self, sentence_embedding, sentence_word_ids) -> List[torch.Tensor]:
         """Pool sub-word embeddings into word embeddings for a single sentence.
         Subword pooling methods: 'first', 'last', 'mean'"""
-        word_embeddings = []
-        subword_embeddings = []
-        previous_word_id = 0
+        word_embeddings: List[torch.Tensor] = []
+        subword_embeddings: List[torch.Tensor] = []
+        previous_word_id: int = 0
 
         # Gather word-level embeddings as lists of subwords
         for token_embedding, word_id in zip(sentence_embedding, sentence_word_ids):

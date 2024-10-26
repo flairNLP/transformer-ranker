@@ -1,5 +1,6 @@
+from typing import Union, Optional
 import torch
-from torchmetrics import F1Score
+from torchmetrics.classification import BinaryF1Score, MulticlassF1Score
 
 
 class KNN:
@@ -16,7 +17,7 @@ class KNN:
         """
         self.k = k
         self.regression = regression
-        self.score = None
+        self.score: Optional[float] = None
 
     def fit(self, embeddings: torch.Tensor, labels: torch.Tensor, batch_size: int = 1024) -> float:
         """
@@ -55,8 +56,13 @@ class KNN:
         else:
             # Majority voting for classification
             y_pred = torch.mode(knn_labels, dim=1).values
-            task = "binary" if num_classes == 2 else "multiclass"
-            f1 = F1Score(average='micro', num_classes=num_classes, task=task)
+
+            f1: Union[BinaryF1Score, MulticlassF1Score]
+            if num_classes == 2:
+                f1 = BinaryF1Score(average="micro")
+            else:
+                f1 = MulticlassF1Score(average="micro", num_classes=num_classes)
+
             score = f1(y_pred, labels).item()
 
         self.score = score
