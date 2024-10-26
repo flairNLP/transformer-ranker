@@ -4,6 +4,6 @@ pythonpath = [
 ]
 
 [tool.mypy]
-files="transformer_ranker,tests"
+files="transformer_ranker"
 ignore_missing_imports = true
 check_untyped_defs = true

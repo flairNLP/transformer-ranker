@@ -10,7 +10,7 @@ setup(
     name='transformer-ranker',
     version='0.1.0',
     packages=find_packages(),
-    description='Rank transformer models for NLP tasks using transferability measures',
+    description='Efficiently find the best-suited language model (LM) for your NLP task',
     long_description=open('README.md').read(),
     long_description_content_type="text/markdown",
     author='Lukas Garbas',

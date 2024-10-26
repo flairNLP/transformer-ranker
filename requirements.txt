@@ -5,3 +5,4 @@ torch
 torchmetrics
 tqdm
 transformers
+scikit-learn
