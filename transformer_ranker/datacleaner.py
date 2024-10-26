@@ -1,12 +1,12 @@
-import torch
-import datasets
-from datasets.dataset_dict import DatasetDict, Dataset
-from tokenizers.pre_tokenizers import Whitespace
-from .utils import configure_logger
-
 import logging
-from typing import List, Dict, Optional, Set, Union, Tuple, Type
+from typing import Dict, List, Optional, Set, Tuple, Type, Union
 
+import datasets
+import torch
+from datasets.dataset_dict import Dataset, DatasetDict
+from tokenizers.pre_tokenizers import Whitespace
+
+from .utils import configure_logger
 
 logger = configure_logger('transformer_ranker', logging.INFO)
 
@@ -189,10 +189,10 @@ class DatasetCleaner:
     def _find_task_type(label_column: str, label_type: Union[Type[int], Type[str], Type[list], Type[float]]) -> str:
         """Determine task type based on the label column's data type."""
         label_type_to_task_type = {
-            int: "sentence classification",  # labels can be integers
-            str: "sentence classification",  # or strings e.g. "positive"
-            list: "word classification",
-            float: "sentence regression",
+            int: "text classification",  # labels can be integers
+            str: "text classification",  # or strings e.g. "positive"
+            list: "token classification",
+            float: "text regression",
         }
 
         task_type = label_type_to_task_type.get(label_type, None)

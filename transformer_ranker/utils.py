@@ -1,9 +1,9 @@
 import logging
-import warnings
-from transformers import logging as transformers_logging
 import operator
+import warnings
+from typing import Dict, List
 
-from typing import List, Dict
+from transformers import logging as transformers_logging
 
 
 def prepare_popular_models(model_size='base') -> List[str]:

@@ -1,11 +1,9 @@
-from transformers import AutoModel, AutoTokenizer
-from tokenizers.pre_tokenizers import Whitespace
+from typing import List, Optional, Union
+
 import torch
-
+from tokenizers.pre_tokenizers import Whitespace
 from tqdm import tqdm
-from typing import Optional, List, Union
-
-from transformers import PreTrainedTokenizerFast
+from transformers import AutoModel, AutoTokenizer, PreTrainedTokenizerFast
 
 
 class Embedder:

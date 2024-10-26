@@ -1,14 +1,14 @@
+import logging
+from typing import List, Optional, Union
+
 import torch
 from datasets.dataset_dict import Dataset, DatasetDict
 from tqdm import tqdm
 
 from .datacleaner import DatasetCleaner
 from .embedder import Embedder
-from .estimators import HScore, LogME, KNN
+from .estimators import KNN, HScore, LogME
 from .utils import Result, configure_logger
-
-import logging
-from typing import List, Optional, Union
 
 logger = configure_logger('transformer_ranker', logging.INFO)
 
@@ -91,7 +91,7 @@ class TransformerRanker:
             layer_pooling = "mean" if "mean" in layer_aggregator else None
 
             # Sentence pooling is only applied for text classification tasks
-            effective_sentence_pooling = None if self.task_type == "word classification" else sentence_pooling
+            effective_sentence_pooling = None if self.task_type == "token classification" else sentence_pooling
 
             embedder = Embedder(
                 model=model,
@@ -110,7 +110,7 @@ class TransformerRanker:
             )
 
             # Single list of embeddings for sequence tagging tasks
-            if self.task_type == "word classification":
+            if self.task_type == "token classification":
                 embeddings = [word_embedding for sentence_embedding in embeddings
                               for word_embedding in sentence_embedding]
 
@@ -194,15 +194,15 @@ class TransformerRanker:
             raise ValueError(f"Unsupported layer pooling: {layer_aggregator}. "
                              f"Use one of the following {valid_layer_aggregators}")
 
-        valid_task_types = ["sentence classification", "word classification", "sentence regression"]
+        valid_task_types = ["text classification", "token classification", "text regression"]
         if self.task_type not in valid_task_types:
             raise ValueError("Unable to determine task type of the dataset. Please specify it as a parameter: "
-                             "task_type= \"sentence classification\", \"sentence regression\", or "
-                             "\"word classification\"")
+                             "task_type= \"text classification\", \"token classification\", or "
+                             "\"text regression\"")
 
     def _estimate_score(self, estimator, embeddings: torch.Tensor, labels: torch.Tensor) -> float:
         """Use an estimator to score a transformer"""
-        regression = self.task_type == "sentence regression"
+        regression = self.task_type == "text regression"
         if estimator in ['hscore'] and regression:
             logger.warning(f'Specified estimator="{estimator}" does not support regression tasks.')
 
