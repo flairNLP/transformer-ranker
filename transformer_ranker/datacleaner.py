@@ -27,7 +27,7 @@ class DatasetCleaner:
         text_pair_column: Optional[str] = None,
     ):
         """
-        Prepare huggingface dataset, clean it, find sentence and label columns.
+        Prepare huggingface dataset. Identify task type, find text and label columns, down-sample, merge data splits.
 
         :param pre_tokenizer: Pre-tokenizer to use, such as Whitespace from huggingface pre-tokenizers.
         :param exclude_test_split: Whether to exclude the test split.
@@ -79,7 +79,7 @@ class DatasetCleaner:
             logger.info("Removing the test split")
             del dataset['test']
 
-        if self.merge_data_splits and (isinstance(dataset, DatasetDict) or isinstance(dataset, list)):
+        if self.merge_data_splits and isinstance(dataset, DatasetDict):
             dataset = self._merge_data_splits(dataset)
 
         # Find text and label columns
@@ -120,7 +120,7 @@ class DatasetCleaner:
         self.label_column = label_column
         self.task_type = task_type
         self.dataset_size = len(dataset)
-        self.log_dataset_info(dataset)
+        self.log_dataset_info()
 
         # Simplify the dataset: keep only relevant columns
         keep_columns = [col for col in (self.text_column, self.text_pair_column, self.label_column) if col is not None]
@@ -186,21 +186,23 @@ class DatasetCleaner:
         return dataset
 
     @staticmethod
-    def _find_task_type(label_column: str, label_type: Union[Type[int], Type[str], Type[list], Type[float]]) -> str:
-        """Determine task type based on the label column's data type."""
+    def _find_task_type(label_column: str, label_type: type) -> str:
+        """Determine the task type based on the label column's data type."""
         label_type_to_task_type = {
-            int: "text classification",  # labels can be integers
+            int: "text classification",  # text classification labels can be integers
             str: "text classification",  # or strings e.g. "positive"
-            list: "token classification",
-            float: "text regression",
+            list: "token classification",  # token-level tasks have a list of labels
+            float: "text regression",  # regression tasks have continuous values
         }
 
-        task_type = label_type_to_task_type.get(label_type, None)
+        for key, task_type in label_type_to_task_type.items():
+            if issubclass(label_type, key):
+                return task_type
 
-        if not task_type:
-            raise ValueError(f"Cannot determine task type from the label column '{label_column}' "
-                             f"value: {type(label_type)}.")
-        return task_type
+        raise ValueError(
+            f"Cannot determine the task type for the label column '{label_column}'. "
+            f"Expected label types are {list(label_type_to_task_type.keys())}, but got {label_type}."
+        )
 
     @staticmethod
     def _tokenize(dataset: Dataset, pre_tokenizer: Whitespace, text_column: str) -> Dataset:
@@ -227,7 +229,7 @@ class DatasetCleaner:
             entry_has_text = bool(text) if isinstance(text, list) else True  # non empty string
             all_tokens_are_valid = all(token != '\uFE0F' for token in text) if isinstance(text, list) else True
             label_is_valid = label is not None and (all(l >= 0 for l in label) if isinstance(label, list) else label >= 0)
-            return entry_has_text and label_is_valid and all_tokens_are_valid # keep entries that have text and labels
+            return entry_has_text and label_is_valid and all_tokens_are_valid  # keep entries that have text and labels
 
         dataset = dataset.filter(dataset_row_is_clean, desc="Removing empty sentences")
         return dataset
@@ -327,9 +329,9 @@ class DatasetCleaner:
 
         return dataset, span_label_map
 
-    def log_dataset_info(self, dataset) -> None:
-        """Log information about dataset after cleaning it"""
-        logger.info(f"Sentence and label columns: '{self.text_column}', '{self.label_column}'")
-        logger.info(f"Task type: '{self.task_type}'")
-        downsample_info = f"(downsampled to {self.dataset_downsample})" if self.dataset_downsample else ""
+    def log_dataset_info(self) -> None:
+        """Log information about dataset"""
+        logger.info(f"Text and label columns: '{self.text_column}', '{self.label_column}'")
+        logger.info(f"Task type identified: '{self.task_type}'")
+        downsample_info = f"(down-sampled to {self.dataset_downsample})" if self.dataset_downsample else ""
         logger.info(f"Dataset size: {self.dataset_size} {downsample_info}")

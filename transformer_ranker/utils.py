@@ -97,7 +97,7 @@ class Result:
         """
         self.metric = metric
         self._results: Dict[str, float] = {}
-        self.layer_estimates: Dict[str, Dict[int, float]] = {}
+        self.layerwise_scores: Dict[str, Dict[int, float]] = {}
 
     @property
     def results(self) -> Dict[str, float]:
@@ -106,19 +106,23 @@ class Result:
 
     @property
     def best_model(self) -> str:
-        """Return the model with the highest score"""
+        """Return the highest scoring model"""
         model_name, _ = max(self.results.items(), key=lambda item: item[1])
         return model_name
 
     @property
     def top_three(self) -> Dict[str, float]:
-        """Return first three model names and scores"""
-        return {k: self.results[k] for k in list(self.results.keys())[:3]}
+        """Return three highest scoring models"""
+        return {k: self.results[k] for k in list(self.results.keys())[:min(3, len(self.results))]}
 
     @property
     def best_layers(self) -> Dict[str, int]:
-        """Return a dictionary with model name: best layer id"""
-        return {model: max(values.items(), key=operator.itemgetter(1))[0] for model, values in self.layer_estimates.items()}
+        """Return a dictionary where each key is a model name and the value is the best layer's ID for that model."""
+        best_layers_dict = {}
+        for model, values in self.layerwise_scores.items():
+            best_layer = max(values.items(), key=operator.itemgetter(1))[0]
+            best_layers_dict[model] = best_layer
+        return best_layers_dict
 
     def add_score(self, model_name, score) -> None:
         self._results[model_name] = score
@@ -126,13 +130,21 @@ class Result:
     def append(self, additional_results: "Result") -> None:
         if isinstance(additional_results, Result):
             self._results.update(additional_results.results)
-            self.layer_estimates.update(additional_results.layer_estimates)
+            self.layerwise_scores.update(additional_results.layerwise_scores)
         else:
             raise ValueError(f"Expected an instance of 'Result', but got {type(additional_results).__name__}. "
                              f"Only 'Result' instances can be appended.")
 
-    def __str__(self) -> str:
-        """Return sorted results as a string"""
+    def _format_results(self) -> str:
+        """Helper method to return sorted results as a formatted string."""
         sorted_results = sorted(self._results.items(), key=lambda item: item[1], reverse=True)
-        result_lines = [f"Rank {i+1}. {model_name}: {score}" for i, (model_name, score) in enumerate(sorted_results)]
+        result_lines = [f"Rank {i + 1}. {model_name}: {score}" for i, (model_name, score) in enumerate(sorted_results)]
         return "\n".join(result_lines)
+
+    def __str__(self) -> str:
+        """Return sorted results as a string (user-friendly)."""
+        return self._format_results()
+
+    def __repr__(self) -> str:
+        """Return sorted results as a string (coder-friendly)."""
+        return self._format_results()

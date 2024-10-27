@@ -20,22 +20,17 @@ class Embedder:
         device: Optional[str] = None,
     ):
         """
-        Embed sentences using a pre-trained transformer model. It works at the word level, meaning each sentence
-        is represented by a list of word vectors. You can pool these into a single sentence embedding if needed.
+        Embed texts using a pre-trained transformer model. This embedder works at the word level, representing each
+        text as a list of word vectors. It supports various sub-word pooling and effective sentence pooling options.
         ♻️  Feel free to use it if you ever need a simple implementation for transformer embeddings.
 
-        :param model: Name of the model to be used. Either a model handle (e.g. 'bert-base-uncased')
-        or a loaded model e.g. AutoModel('bert-base-uncased').
-        :param tokenizer: Optional parameter to specify the tokenizer. Either a tokenizer handle
-        (e.g. 'bert-base-uncased') or a loaded tokenizer e.g. AutoTokenizer.from_pretrained('bert-base-uncased').
-        :param subword_pooling: Method used to pool sub-word embeddings to form word-level embeddings.
-        :param layer_ids: Specifies which layers' outputs should be used. This can be a single top-most layer as '-1',
-        multiple layers like '-1,-2,-3, -4', or 'all' to use all layers. Default is 'all'.
-        :param layer_pooling: Optional method used to combine or pool embeddings from selected layers.
-        If not specified, no pooling across layers is applied, and each layer's output is handled independently.
-        :param use_pretokenizer: If to pre-tokenize texts using whitespace
-        :param device: Optional specification of the computing device where the model operations are performed.
-        Can be 'cpu' or 'cuda'. If not specified, it defaults to the best available device.
+        :param model: The model to use, either by name (e.g., 'bert-base-uncased') or a loaded model instance.
+        :param tokenizer: Optional tokenizer, either by name or a loaded tokenizer instance.
+        :param subword_pooling: Method for pooling sub-word embeddings into word-level embeddings.
+        :param layer_ids: Layers to use e.g., '-1' for the top layer, '-1,-2' for multiple, or 'all'. Default is 'all'.
+        :param layer_pooling: Optional method for pooling across selected layers.
+        :param use_pretokenizer: Whether to pre-tokenize texts using whitespace.
+        :param device: Device for computations, either 'cpu' or 'cuda'. Defaults to the available device.
         """
         # Load transformer model
         if isinstance(model, torch.nn.Module):
@@ -47,15 +42,17 @@ class Embedder:
 
         # Load a model-specific tokenizer
         self.tokenizer: PreTrainedTokenizerFast
+        tokenizer_source = tokenizer if isinstance(tokenizer, str) else self.model_name
 
-        if tokenizer is None:
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name, add_prefix_space=True)
-
-        elif isinstance(tokenizer, str):
-            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer, add_prefix_space=True)
-
-        else:
+        # Assign or load tokenizer
+        if isinstance(tokenizer, PreTrainedTokenizerFast):
             self.tokenizer = tokenizer
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer_source,
+                add_prefix_space=True,
+                clean_up_tokenization_spaces=True,
+            )
 
         # Add padding token for models that do not have it (e.g. GPT2)
         if self.tokenizer.pad_token is None:
@@ -81,7 +78,6 @@ class Embedder:
         # Set cpu or gpu device
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         else:
             self.device = torch.device(device)
         
@@ -126,7 +122,7 @@ class Embedder:
 
         for batch in tqdm(
             batches,
-            desc="Retrieving Embeddings ",
+            desc="Retrieving Embeddings",
             disable=not show_loading_bar,
             bar_format=tqdm_bar_format
         ):
@@ -190,8 +186,8 @@ class Embedder:
             return [-i for i in range(1, self.num_transformer_layers + 1)]
 
         layer_ids = [int(number) for number in layer_ids.split(",")]
+        layer_ids = [layer_id for layer_id in layer_ids if self.num_transformer_layers >= abs(layer_id)]
 
-        layer_ids = [layer_id for layer_id in layer_ids if self.num_transformer_layers + 1 >= abs(layer_id)]
         return layer_ids
 
     def _extract_relevant_layers(self, batched_embeddings: torch.Tensor) -> torch.Tensor:

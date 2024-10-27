@@ -24,13 +24,13 @@ class TransformerRanker:
         **kwargs
     ):
         """
-        Rank language models based on their predicted performance for a specific NLP task.
-        We use metrics like h-score or logme to estimate the quality of embeddings. Features are taken from
-        deeper layers by averaging all layers or by selecting the best-scoring layer in each model.
+        Rank language models for different NLP tasks. Embed a part of the dataset and
+        estimate embedding suitability with transferability metrics like hscore or logme.
+        Embeddings can either be averaged across all layers or selected from the best-performing layer.
 
-        :param dataset: huggingface dataset for evaluating transformer models, containing texts and label columns.
-        :param dataset_downsample: a fraction to which the dataset should be down-sampled.
-        :param kwargs: Additional parameters for data pre-processing.
+        :param dataset: a dataset from huggingface, containing texts and label columns.
+        :param dataset_downsample: a fraction to which the dataset should be reduced.
+        :param kwargs: Additional dataset-specific parameters for data cleaning.
         """
         # Clean the original dataset and keep only needed columns
         self.data_handler = DatasetCleaner(dataset_downsample=dataset_downsample,
@@ -42,7 +42,6 @@ class TransformerRanker:
 
         self.dataset = self.data_handler.prepare_dataset(dataset)
 
-        # Find task type if not given: word classification or text classification
         self.task_type = self.data_handler.task_type
 
         # Find text and label columns
@@ -76,16 +75,15 @@ class TransformerRanker:
         """
         self._confirm_ranker_setup(estimator=estimator, layer_aggregator=layer_aggregator)
 
-        # Load all transformers into hf cache for later use
+        # Load all transformers into hf cache
         self._preload_transformers(models)
 
         labels = self.data_handler.prepare_labels(self.dataset)
 
-        result_dictionary = Result(metric=estimator)
+        ranking_results = Result(metric=estimator)
 
         # Iterate over each transformer model and score it
         for model in models:
-
             # Select transformer layers to be used: last layer (i.e. output layer) or all of the layers
             layer_ids = "-1" if layer_aggregator == "lastlayer" else "all"
             layer_pooling = "mean" if "mean" in layer_aggregator else None
@@ -111,13 +109,11 @@ class TransformerRanker:
 
             # Single list of embeddings for sequence tagging tasks
             if self.task_type == "token classification":
-                embeddings = [word_embedding for sentence_embedding in embeddings
-                              for word_embedding in sentence_embedding]
+                embeddings = [word for sentence in embeddings for word in sentence]
 
-            embedded_layer_ids = embedder.layer_ids
             model_name = embedder.model_name
+            embedded_layer_ids = embedder.layer_ids
             num_layers = embeddings[0].size(0)
-            layer_scores = []
 
             if gpu_estimation:
                 labels = labels.to(embedder.device)
@@ -127,8 +123,9 @@ class TransformerRanker:
             torch.cuda.empty_cache()
 
             # Estimate scores for each layer
+            layer_scores = []
             tqdm_bar_format = '{l_bar}{bar:10}{r_bar}{bar:-10b}'
-            for layer_id in tqdm(range(num_layers), desc="Estimating Performance", bar_format=tqdm_bar_format):
+            for layer_id in tqdm(range(num_layers), desc="Transferability Score", bar_format=tqdm_bar_format):
                 # Get the position of the layer index
                 layer_index = embedded_layer_ids[layer_id]
 
@@ -143,26 +140,21 @@ class TransformerRanker:
                 layer_scores.append(score)
 
             # Store scores for each layer in the result dictionary
-            result_dictionary.layer_estimates[model_name] = dict(zip(embedded_layer_ids, layer_scores))
+            ranking_results.layerwise_scores[model_name] = dict(zip(embedded_layer_ids, layer_scores))
 
-            # Aggregate scores for each layer
-            if layer_aggregator in ["layermean", "lastlayer"]:
-                final_score = layer_scores[0]
-            elif layer_aggregator == "bestlayer":
-                final_score = max(layer_scores)
-            else:
-                logger.warning(f'Unknown estimator: "{estimator}"')
-                final_score = 0.
+            # Aggregate layer scores
+            final_score = max(layer_scores) if layer_aggregator == "bestlayer" else layer_scores[0]
+            ranking_results.add_score(model_name, final_score)
 
-            result_dictionary.add_score(model_name, final_score)
+            # Log the final score along with scores for each layer
+            result_log = f"{model_name} estimation: {final_score} ({ranking_results.metric})"
 
-            # Log the scoring information for a model
-            base_log = f"{model_name}, score: {final_score}"
-            layer_estimates_log = (f", layerwise scores: {result_dictionary.layer_estimates[model_name]}"
-                                   if layer_aggregator == 'bestlayer' else "")
-            logger.info(base_log + layer_estimates_log)
+            if layer_aggregator == 'bestlayer':
+                result_log += f", layerwise scores: {ranking_results.layerwise_scores[model_name]}"
 
-        return result_dictionary
+            logger.info(result_log)
+
+        return ranking_results
 
     @staticmethod
     def _preload_transformers(models: List[Union[str, torch.nn.Module]]) -> None:
