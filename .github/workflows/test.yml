@@ -15,6 +15,7 @@ on:
     - ".gitignore"
     - "README.md"
     - "LICENSE"
+
 jobs:
   run:
     name: "Run Tests"
@@ -25,23 +26,34 @@ jobs:
         python-version: ["3.8"]
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout the repository
+      uses: actions/checkout@v4
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Set up pip cache
-      if: runner.os == 'Linux'
-      uses: actions/cache@v4
+
+    # Write the exact Python version to a file for cache-busting.
+    - run: |
+        echo "${{ steps.setup-python.outputs.python-version }}" > ".installed-python"
+
+    - uses: "actions/cache@v4"
+      id: "restore-cache"
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-        restore-keys: ${{ runner.os }}-pip-
-    - name: Install package
-      run: pip install -e .
-    - name: Install pytest
-      run: pip install pytest
+        key: "venv-${{ hashFiles('.installed-python', 'requirements.txt') }}"
+        path: |
+          .venv/
+
+    - name: "Create a virtual environment"
+      if: "steps.restore-cache.outputs.cache-hit == false"
+      run: |
+        python -m venv .venv
+        .venv/bin/python -m pip install --upgrade pip setuptools wheel pytest
+        .venv/bin/python -m pip install -r requirements.txt
+
     - name: Print Package Versions
-      run: pip freeze
-    - name: Tests
-      run: pytest
+      run: .venv/bin/python -m pip freeze
+
+    - name: Run pytest
+      run: .venv/bin/python -m pytest
