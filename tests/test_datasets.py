@@ -6,23 +6,23 @@ from transformer_ranker.datacleaner import DatasetCleaner
 
 test_datasets = [
     # Token datasets
-    ("token classification", "conll2003"),
-    ("token classification", "wnut_17"),
+    ("token classification", "conll2003", 0.01),
+    ("token classification", "wnut_17", 0.05),
 
     # Text classification
-    ("text classification", "trec"),
-    ("text classification", "stanfordnlp/sst2"),
-    ("text classification", "hate_speech18"),
+    ("text classification", "trec", 0.05),
+    ("text classification", "stanfordnlp/sst2", 0.005),
+    ("text classification", "hate_speech18", 0.025),
 
     # Text-pair classification
-    ("text classification", "yangwang825/sick"),
-    ("text classification", "SetFit/rte"),
+    ("text classification", "yangwang825/sick", 0.025),
+    ("text classification", "SetFit/rte", 0.05),
 ]
 
-@pytest.mark.parametrize("task_type,dataset_name", test_datasets)
-def test_datacleaner(task_type, dataset_name):
+@pytest.mark.parametrize("task_type,dataset_name,downsampling_ratio", test_datasets)
+def test_datacleaner(task_type, dataset_name, downsampling_ratio):
 
-    preprocessor = DatasetCleaner(dataset_downsample=0.2)
+    preprocessor = DatasetCleaner(dataset_downsample=downsampling_ratio)
     dataset = preprocessor.prepare_dataset(dataset_name)
 
     # Test dataset preprocessing

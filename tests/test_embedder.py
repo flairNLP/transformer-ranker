@@ -11,25 +11,15 @@ test_sentences = [
 
 
 def test_embedder_inputs(small_language_models):
-    embeddings = {
-        'prajjwal1/bert-tiny': [],
-        'google/electra-small-discriminator': []
-    }
-
     for model in small_language_models:
         embedder = Embedder(model=model, layer_ids="all")
-        model_name = embedder.model_name
 
         for sentence in test_sentences:
             embedding = embedder.embed(sentence)
-            embeddings[model_name].append(embedding)
-
-    for model_name, sentence_embeddings in embeddings.items():
-        for embedding in sentence_embeddings:
-            assert embedding is not None and embedding != [], f"Empty or None embedding found for model {model_name}"
+            assert embedding is not None and embedding != [], f"Empty or None embedding found for model {embedder.model_name}"
 
 
-def test_embedder_outputs(small_language_models):
+def test_embedder_word_level(small_language_models):
     for model in small_language_models:
         embedder = Embedder(model=model, layer_ids="all")  # test word-level embedder
         model_name = embedder.model_name
@@ -40,6 +30,8 @@ def test_embedder_outputs(small_language_models):
         assert embedding.shape[:2] == (5, num_layers), \
             f"Expected first two dimensions to be (5, {num_layers}), got {embedding.shape[:2]} using model {model_name}"
 
+
+def test_embedder_sentence_pooling(small_language_models):
     for model in small_language_models:
         embedder = Embedder(model=model, layer_ids="all", sentence_pooling="mean")  # test sentence-level embedder
         model_name = embedder.model_name
