@@ -21,7 +21,7 @@ def test_embedder_inputs(small_language_models):
 
 def test_embedder_word_level(small_language_models):
     for model in small_language_models:
-        embedder = Embedder(model=model, layer_ids="all")  # test word-level embedder
+        embedder = Embedder(model=model, layer_ids="all")
         model_name = embedder.model_name
         num_layers = embedder.num_transformer_layers
         embedding = embedder.embed("this is a test sentence")[0]  # 5 words
@@ -31,9 +31,9 @@ def test_embedder_word_level(small_language_models):
             f"Expected first two dimensions to be (5, {num_layers}), got {embedding.shape[:2]} using model {model_name}"
 
 
-def test_embedder_sentence_pooling(small_language_models):
+def test_embedder_sentence_level(small_language_models):
     for model in small_language_models:
-        embedder = Embedder(model=model, layer_ids="all", sentence_pooling="mean")  # test sentence-level embedder
+        embedder = Embedder(model=model, layer_ids="all", sentence_pooling="mean")
         model_name = embedder.model_name
         num_layers = embedder.num_transformer_layers
         embedding = embedder.embed("this is a test sentence.")[0]
@@ -42,3 +42,20 @@ def test_embedder_sentence_pooling(small_language_models):
         assert embedding.shape[0] == num_layers, \
             (f"Expected to have a single sentence embedding with dim (1, hidden_size)"
              f"but got {embedding.shape} using model {model_name}")
+
+
+def test_embedder_layers(small_language_models):
+    _, electra_small = small_language_models
+    with pytest.raises(ValueError):
+        # layer -13 should be out-of-bounds
+        Embedder(model=electra_small, layer_ids="-13")
+
+    embedder = Embedder(model=electra_small, layer_ids="all")
+    num_layers = embedder.num_transformer_layers
+    embedding = embedder.embed("word")[0]
+    assert embedding.shape[1] == num_layers, \
+        f"Expected to have an embedding for all {num_layers} layers, but got {embedding.shape}"
+
+    embedder = Embedder(model=electra_small, layer_ids="-1")
+    embedding = embedder.embed("word")[0]
+    assert embedding.shape[1] == 1, f"Expected to have an embedding for a single layer, but got {embedding.shape}"
