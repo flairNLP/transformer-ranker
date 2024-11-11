@@ -38,7 +38,6 @@ results = ranker.run(language_models, batch_size=64)
 print(results)
 ```
 
-
 ## Step 1. Load the Dataset
 
 Use Hugging Face’s Datasets library to load and access various text datasets.
