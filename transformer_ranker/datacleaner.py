@@ -17,7 +17,6 @@ class DatasetCleaner:
         pre_tokenizer: Optional[Whitespace] = None,
         exclude_test_split: bool = False,
         merge_data_splits: bool = True,
-        change_ner_encoding_to_spans: bool = True,
         remove_empty_sentences: bool = True,
         dataset_downsample: Optional[float] = None,
         task_type: Optional[str] = None,
@@ -25,6 +24,7 @@ class DatasetCleaner:
         label_column: Optional[str] = None,
         label_map: Optional[Dict[str, int]] = None,
         text_pair_column: Optional[str] = None,
+        remove_bio_notation: bool = True,
     ):
         """
         Prepare huggingface dataset. Identify task type, find text and label columns, down-sample, merge data splits.
@@ -32,19 +32,19 @@ class DatasetCleaner:
         :param pre_tokenizer: Pre-tokenizer to use, such as Whitespace from huggingface pre-tokenizers.
         :param exclude_test_split: Whether to exclude the test split.
         :param merge_data_splits: Whether to merge train, dev, and test splits into one.
-        :param change_ner_encoding_to_spans: Whether to change BIO encoding to single class labels.
+        :param remove_bio_notation: Change BIO encoding to single class labels by removing B-, I-, O- prefixes
         :param remove_empty_sentences: Whether to remove empty sentences.
-        :param dataset_downsample: Fraction to downsample the dataset to.
-        :param task_type: Type of task (e.g., 'sentence classification', 'word classification', 'sentence regression').
-        :param text_column: Column name where texts are stored.
-        :param label_column: Column name where labels are stored.
-        :param label_map: Mapping of labels to integers.
-        :param text_pair_column: Column name where the second text pair is stored. For entailment-type tasks.
+        :param dataset_downsample: Fraction to reduce the dataset size.
+        :param task_type: Task category (e.g., 'token classification', 'text classification', 'text regression').
+        :param text_column: Column name for texts.
+        :param label_column: Column name for labels.
+        :param label_map: A dictionary which maps label names to integers.
+        :param text_pair_column: Column name where the second text pair is stored (for entailment-like tasks)
         """
         self.pre_tokenizer = pre_tokenizer
         self.exclude_test_split = exclude_test_split
         self.merge_data_splits = merge_data_splits
-        self.change_ner_encoding_to_spans = change_ner_encoding_to_spans
+        self.remove_bio_notation = remove_bio_notation
         self.remove_empty_sentences = remove_empty_sentences
         self.dataset_downsample = dataset_downsample
         self.task_type = task_type
@@ -87,10 +87,10 @@ class DatasetCleaner:
                                                                                   self.text_column,
                                                                                   self.label_column)
 
-        # Determine task type based on label type if not specified
+        # Find task type based on label type
         task_type = self._find_task_type(label_column, label_type) if not self.task_type else self.task_type
 
-        # Clean the dataset by removing empty sentences and negative labels
+        # Clean the dataset by removing empty sentences and empty/negative labels
         if self.remove_empty_sentences:
             dataset = self._remove_empty_rows(dataset, text_column, label_column)
 
@@ -98,31 +98,31 @@ class DatasetCleaner:
         if self.dataset_downsample:
             dataset = self._downsample(dataset, ratio=self.dataset_downsample)
 
-        # Pre-tokenize sentences if pre-tokenizer is specified
-        if not task_type == "word classification" and self.pre_tokenizer:
+        # Pre-tokenize sentences if pre-tokenizer is given
+        if not task_type == "token classification" and self.pre_tokenizer:
             dataset = self._tokenize(dataset, self.pre_tokenizer, text_column)
 
         # Concatenate text columns for text-pair tasks
         if self.text_pair_column:
-            dataset = self._merge_textpairs(dataset, text_column, self.text_pair_column)
+            dataset, text_column = self._merge_textpairs(dataset, text_column, self.text_pair_column)
 
         # Convert string labels to integers
         if label_type == str:
             dataset, label_map = self._make_labels_categorical(dataset, label_column)
             logger.info(f"Label map: {label_map}")
 
-        # Change NER encoding to spans if specified
-        if task_type == "word classification" and self.change_ner_encoding_to_spans:
-            dataset, self.label_map = self._change_to_span_encoding(dataset, label_column, self.label_map)
+        # Remove BIO prefixes for ner or chunking tasks
+        if task_type == "token classification" and self.remove_bio_notation:
+            dataset, self.label_map = self._remove_bio_notation(dataset, label_column, self.label_map)
 
-        # Store updated attributes and log them
+        # Set updated attributes and log them
         self.text_column = text_column
         self.label_column = label_column
         self.task_type = task_type
         self.dataset_size = len(dataset)
         self.log_dataset_info()
 
-        # Simplify the dataset: keep only relevant columns
+        # Keep only text and label columns
         keep_columns = [col for col in (self.text_column, self.text_pair_column, self.label_column) if col is not None]
         dataset = self._remove_columns(dataset, keep_columns=keep_columns)
 
@@ -177,13 +177,16 @@ class DatasetCleaner:
         return text_column, label_column, label_type
 
     @staticmethod
-    def _merge_textpairs(dataset: Dataset, text_column: str, text_pair_column: str) -> Dataset:
+    def _merge_textpairs(dataset: Dataset, text_column: str, text_pair_column: str) -> Tuple[Dataset, str]:
         """Concatenate text pairs into a single text using separator token"""
+        new_text_column_name = text_column + '+' + text_pair_column
+
         def merge_texts(example: Dict[str, str]) -> Dict[str, str]:
             example[text_column] = example[text_column] + " [SEP] " + example[text_pair_column]
+            example[new_text_column_name] = example.pop(text_column)
             return example
-        dataset = dataset.map(merge_texts, num_proc=None, desc="Merge sentence pair columns")
-        return dataset
+        dataset = dataset.map(merge_texts, num_proc=None, desc="Merging text pair columns")
+        return dataset, new_text_column_name
 
     @staticmethod
     def _find_task_type(label_column: str, label_type: type) -> str:
@@ -261,60 +264,49 @@ class DatasetCleaner:
         return dataset, label_map
 
     @staticmethod
-    def _change_to_span_encoding(
+    def _remove_bio_notation(
         dataset: Dataset,
         label_column: str,
         label_map: Optional[Dict[str, int]] = None,
     ) -> Tuple[Dataset, Dict[str, int]]:
         """Remove BIO prefixes for NER labels and create a new label map.
-        Example: ['B-PER', 'I-PER', 'O'] -> ['PER', 'PER', 'O']
-        Original label map: {'B-PER': 0, 'I-PER': 1, 'O': 2}
-        Converted span label map: {'PER': 0, 'O': 1}
+        Example: ['O', 'B-PER', 'I-PER'] -> ['O', 'PER', 'PER']
+        Original label map: {'O': 0, 'B-PER': 1, 'I-PER': 2}
+        Label map without BIO notation: {'O': 0, 'PER': 1}
 
         :param dataset: The dataset containing BIO labels.
         :param label_column: The name of the label column.
         :param label_map: Optional dictionary to map BIO labels to integers. If not provided, a new one will be created.
         :return: A tuple with the dataset containing new labels and the updated label map.
         """
-        # Attempt to get the label map from dataset features information
         if not label_map:
-            features = dataset.features
-            if label_column in features and hasattr(features[label_column], 'feature') and hasattr(
-                    features[label_column].feature, 'names'):
-                label_map = {name: idx for idx, name in enumerate(features[label_column].feature.names)}
-            else:
-                # Create label map manually if not found
+            try:
+                # Attempt to get the label map from dataset feature information
+                label_map = {label: idx for idx, label in enumerate(dataset.features[label_column].feature.names)}
+            except AttributeError:
+                # Try to create label map manually
                 logger.info('Label map not found. Creating manually...')
                 unique_labels: Set[str] = set()
-                label_data = dataset[label_column] if isinstance(dataset, Dataset) else [dataset[split][label_column]
-                                                                                         for split in dataset]
-                for label_list in label_data:
+
+                for label_list in dataset[label_column]:
                     unique_labels.update(
                         label.split('-')[-1] if isinstance(label, str) else str(label) for label in label_list)
                 label_map = {label: idx for idx, label in enumerate(sorted(unique_labels, key=int))}
 
-        logger.info(f"Label map: {label_map}")
-
-        # Remove BIO encoding from the label map
-        span_label_map: Dict[str, int] = {}
+        # Remove BIO encoding and create a new label map
+        new_label_map: Dict[str, int] = {}
         for label in label_map:
             main_label = label.split('-')[-1] if isinstance(label, str) else label
-            if main_label not in span_label_map:
-                span_label_map[main_label] = len(span_label_map)
+            if main_label not in new_label_map:
+                new_label_map[main_label] = len(new_label_map)
 
-        logger.info(f"Simplified label map: {span_label_map}")
-
-        if label_map == span_label_map:
-            logger.warning("Could not convert BIO labels to span labels. "
-                           "Please add the label map as parameter label_map: Dict[str, int] = ... manually.")
-
-        # Create a reverse map from the original integer labels to the simplified span labels
+        # Create a reverse map from original integer labels to labels without BIO prefixes
         reverse_map = {}
         for original_label, index in label_map.items():
             main_label = original_label.split('-')[-1] if isinstance(original_label, str) else original_label
-            reverse_map[index] = span_label_map[main_label]
+            reverse_map[index] = new_label_map[main_label]
 
-        # Map labels to their corresponding span encoding
+        # Map labels to their class labels without BIO
         def map_to_spans(example):
             example_labels = example[label_column]
             new_labels = [reverse_map[bio_label] for bio_label in example_labels]
@@ -323,15 +315,23 @@ class DatasetCleaner:
 
         if isinstance(dataset, DatasetDict):
             for split in dataset.keys():
-                dataset[split] = dataset[split].map(map_to_spans, num_proc=None, desc="Mapping BIO to span encoding")
+                dataset[split] = dataset[split].map(map_to_spans, num_proc=None, desc="Removing BIO encoding")
         else:
-            dataset = dataset.map(map_to_spans, num_proc=None, desc="Mapping BIO to span encoding")
+            dataset = dataset.map(map_to_spans, num_proc=None, desc="Removing BIO encoding")
 
-        return dataset, span_label_map
+        if label_map == new_label_map:
+            logger.warning("Could not remove BIO prefixes for this tagging dataset. "
+                           "Please add the label map as parameter label_map: Dict[str, int] = ... manually.")
+        else:
+            logger.info(f"Label map: {label_map}")
+            logger.info(f"New label map: {new_label_map}")
+
+        return dataset, new_label_map
 
     def log_dataset_info(self) -> None:
         """Log information about dataset"""
-        logger.info(f"Text and label columns: '{self.text_column}', '{self.label_column}'")
-        logger.info(f"Task type identified: '{self.task_type}'")
-        downsample_info = f"(down-sampled to {self.dataset_downsample})" if self.dataset_downsample else ""
-        logger.info(f"Dataset size: {self.dataset_size} {downsample_info}")
+        logger.info(f"Texts and labels: '{self.text_column}', '{self.label_column}'")
+        logger.info(f"Task category: '{self.task_type}'")
+        is_downsampled = self.dataset_downsample and self.dataset_downsample < 1.0
+        downsample_info = f"(down-sampled to {self.dataset_downsample})" if is_downsampled else ""
+        logger.info(f"Dataset size: {self.dataset_size} texts {downsample_info}")

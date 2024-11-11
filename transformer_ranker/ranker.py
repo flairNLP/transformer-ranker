@@ -20,7 +20,6 @@ class TransformerRanker:
         dataset_downsample: Optional[float] = None,
         text_column: Optional[str] = None,
         label_column: Optional[str] = None,
-        task_type: Optional[str] = None,
         **kwargs
     ):
         """
@@ -36,7 +35,6 @@ class TransformerRanker:
         self.data_handler = DatasetCleaner(dataset_downsample=dataset_downsample,
                                            text_column=text_column,
                                            label_column=label_column,
-                                           task_type=task_type,
                                            **kwargs,
                                            )
 
@@ -76,7 +74,7 @@ class TransformerRanker:
         self._confirm_ranker_setup(estimator=estimator, layer_aggregator=layer_aggregator)
 
         # Load all transformers into hf cache
-        self._preload_transformers(models)
+        self._preload_transformers(models, device)
 
         labels = self.data_handler.prepare_labels(self.dataset)
 
@@ -157,13 +155,12 @@ class TransformerRanker:
         return ranking_results
 
     @staticmethod
-    def _preload_transformers(models: List[Union[str, torch.nn.Module]]) -> None:
+    def _preload_transformers(models: List[Union[str, torch.nn.Module]], device: Optional[str] = None) -> None:
         """Loads all models into HuggingFace cache"""
         cached_models, download_models = [], []
-
         for model_name in models:
             try:
-                Embedder(model_name, local_files_only=True)
+                Embedder(model_name, local_files_only=True, device=device)
                 cached_models.append(model_name)
             except OSError:
                 download_models.append(model_name)
@@ -172,7 +169,7 @@ class TransformerRanker:
         logger.info(f"Downloading models: {download_models}") if download_models else None
 
         for model_name in models:
-            Embedder(model_name)
+            Embedder(model_name, device=device)
 
     def _confirm_ranker_setup(self, estimator, layer_aggregator) -> None:
         """Validate estimator and layer selection setup"""
@@ -192,15 +189,15 @@ class TransformerRanker:
                              "task_type= \"text classification\", \"token classification\", or "
                              "\"text regression\"")
 
+        if self.task_type == 'text regression' and estimator == 'hscore':
+            raise ValueError(f"\"{estimator}\" does not support text regression. "
+                             f"Use one of the following estimators: {valid_estimators.remove('hscore')}")
+
     def _estimate_score(self, estimator, embeddings: torch.Tensor, labels: torch.Tensor) -> float:
         """Use an estimator to score a transformer"""
-        regression = self.task_type == "text regression"
-        if estimator in ['hscore'] and regression:
-            logger.warning(f'Specified estimator="{estimator}" does not support regression tasks.')
-
         estimator_classes = {
-            "knn": KNN(k=3, regression=regression),
-            "logme": LogME(regression=regression),
+            "knn": KNN(k=3, regression=(self.task_type == "text regression")),
+            "logme": LogME(regression=(self.task_type == "text regression")),
             "hscore": HScore(),
         }
 

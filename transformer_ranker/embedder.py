@@ -20,17 +20,17 @@ class Embedder:
         device: Optional[str] = None,
     ):
         """
-        Embed texts using a pre-trained transformer model. This embedder works at the word level, representing each
-        text as a list of word vectors. It supports various sub-word pooling and effective sentence pooling options.
-        ♻️  Feel free to use it if you ever need a simple implementation for transformer embeddings.
+        Embed texts using a pre-trained transformer model. This embedder works at the word level, where
+        each text is a list of word vectors. It supports different sub-word pooling and sentence pooling options.
+        ♻️ Feel free to use it if you need a simple implementation for word or text embeddings.
 
-        :param model: The model to use, either by name (e.g., 'bert-base-uncased') or a loaded model instance.
-        :param tokenizer: Optional tokenizer, either by name or a loaded tokenizer instance.
-        :param subword_pooling: Method for pooling sub-word embeddings into word-level embeddings.
+        :param model: Model name 'bert-base-uncased' or a model instance e.g. AutoModel.from_pretrained(...)
+        :param tokenizer: Optional tokenizer, either a string name or a tokenizer instance.
+        :param subword_pooling: Method for pooling sub-words into word embeddings.
         :param layer_ids: Layers to use e.g., '-1' for the top layer, '-1,-2' for multiple, or 'all'. Default is 'all'.
         :param layer_pooling: Optional method for pooling across selected layers.
         :param use_pretokenizer: Whether to pre-tokenize texts using whitespace.
-        :param device: Device for computations, either 'cpu' or 'cuda'. Defaults to the available device.
+        :param device: Device for computations, either 'cpu' or 'cuda:0'. Defaults to the available device.
         """
         # Load transformer model
         if isinstance(model, torch.nn.Module):
@@ -42,12 +42,10 @@ class Embedder:
 
         # Load a model-specific tokenizer
         self.tokenizer: PreTrainedTokenizerFast
-        tokenizer_source = tokenizer if isinstance(tokenizer, str) else self.model_name
-
-        # Assign or load tokenizer
         if isinstance(tokenizer, PreTrainedTokenizerFast):
             self.tokenizer = tokenizer
         else:
+            tokenizer_source = tokenizer if isinstance(tokenizer, str) else self.model_name
             self.tokenizer = AutoTokenizer.from_pretrained(
                 tokenizer_source,
                 add_prefix_space=True,
@@ -68,11 +66,9 @@ class Embedder:
         # Set relevant layers that will be used for embeddings
         self.layer_ids = self._filter_layer_ids(layer_ids)
 
-        # Set pooling operations for sub-words and layers
+        # Set pooling options
         self.subword_pooling = subword_pooling
         self.layer_pooling = layer_pooling
-
-        # Set sentence-pooling to get embedding for the full text if specified
         self.sentence_pooling = sentence_pooling
 
         # Set cpu or gpu device
@@ -80,7 +76,6 @@ class Embedder:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
-        
         self.model = self.model.to(self.device)
 
     def tokenize(self, sentences):
@@ -141,7 +136,7 @@ class Embedder:
         attention_mask = tokenized_input["attention_mask"].to(self.device)
         word_ids = [tokenized_input.word_ids(i) for i in range(len(sentences))]
 
-        # Embedd using a transformer: forward pass to get all hidden states of the model
+        # Embedd: forward pass to get all hidden states of the model
         with torch.no_grad():
             hidden_states = self.model(
                 input_ids, attention_mask=attention_mask, output_hidden_states=True
@@ -157,7 +152,7 @@ class Embedder:
         # Extract layers defined by layer_ids, average all layers for a batch of sentences if specified
         embeddings = self._extract_relevant_layers(embeddings)
 
-        # Process each sentence separately and gather word or sentence embeddings
+        # Go through each sentence separately
         sentence_embeddings = []
         for subword_embeddings, word_ids in zip(embeddings, word_ids):
 
@@ -167,13 +162,11 @@ class Embedder:
             # Stack all word-level embeddings that represent a sentence
             word_embeddings = torch.stack(word_embedding_list, dim=0)
 
-            # Pool word-level embeddings into a single sentence vector if specified
+            # Pool word-level embeddings into a sentence embedding
             sentence_embedding = self._pool_words(word_embeddings) if self.sentence_pooling else word_embeddings
 
-            # Store sentence-embedding tensors in a python list
             sentence_embeddings.append(sentence_embedding)
 
-        # Move embedding batch to cpu
         if move_embeddings_to_cpu:
             sentence_embeddings = [sentence_embedding.cpu() for sentence_embedding in sentence_embeddings]
 
@@ -188,18 +181,22 @@ class Embedder:
         layer_ids = [int(number) for number in layer_ids.split(",")]
         layer_ids = [layer_id for layer_id in layer_ids if self.num_transformer_layers >= abs(layer_id)]
 
+        if not layer_ids:
+            raise ValueError(f"\"layer_ids\" are out of bounds for the model size. "
+                             f"Num layers in model {self.model_name}: {self.num_transformer_layers}")
+
         return layer_ids
 
     def _extract_relevant_layers(self, batched_embeddings: torch.Tensor) -> torch.Tensor:
         """Keep only relevant layers in each embedding and apply layer-wise pooling if required"""
-        # To maintain original layer order, map negative layer IDs to positive indices,
+        # Use positive layer ids ('-1 -> 23' is the last layer in a 24 layer model)
         layer_ids = sorted((layer_id if layer_id >= 0 else self.num_transformer_layers + layer_id)
                            for layer_id in self.layer_ids)
 
-        # A batch of raw embeddings is in this shape (batch_size, sequence_length, num_layers - 1, hidden_size)
+        # A batch of embeddings is in this shape (batch_size, sequence_length, num_layers, hidden_size)
         batched_embeddings = batched_embeddings[:, :, layer_ids, :]  # keep only selected layers
 
-        # Apply mean pooling over the layer dimension if specified
+        # average all layers
         if self.layer_pooling == "mean":
             batched_embeddings = torch.mean(batched_embeddings, dim=2, keepdim=True)
 
