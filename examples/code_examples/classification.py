@@ -1,13 +1,11 @@
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker
 
-# Load 'trec' dataset
+# Load and inspect the 'trec' dataset
 dataset = load_dataset('trec')
+print(dataset)
 
-# Add column names, but that's not necessary
-text_column, label_column = "text", "coarse_label"
-
-# You can test on cpu using smaller models
+# Use smaller models to run on CPU
 language_models = ['prajjwal1/bert-tiny',
                    'google/electra-small-discriminator',
                    'microsoft/deberta-v3-small',
@@ -16,9 +14,8 @@ language_models = ['prajjwal1/bert-tiny',
 
 # Initialize the ranker
 ranker = TransformerRanker(dataset=dataset,
-                           text_column=text_column,
-                           label_column=label_column,
                            dataset_downsample=0.2,
+                           label_column="coarse_label",
                            )
 
 # ... and run it
@@ -28,8 +25,8 @@ result = ranker.run(models=language_models, batch_size=32)
 print(result)
 
 """Result: 
-Rank 1. microsoft/deberta-v3-small: 4.0091
-Rank 2. bert-base-uncased: 3.8054
-Rank 3. google/electra-small-discriminator: 2.959
-Rank 4. prajjwal1/bert-tiny: 1.9793
+Rank 1. microsoft/deberta-v3-small: 4.0819
+Rank 2. bert-base-uncased: 3.9312
+Rank 3. google/electra-small-discriminator: 2.9627
+Rank 4. prajjwal1/bert-tiny: 1.998
 """

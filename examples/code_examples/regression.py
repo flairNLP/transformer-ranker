@@ -1,11 +1,8 @@
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker
 
-# Load a regression dataset. I could not find a better one yet :s
-dataset = load_dataset('SetFit/stsb')
-
-# This dataset has two columns for texts and one for float labels
-text_column, text_pair_column, label_column = "text1", "text2", "label"
+# Load a regression dataset
+regression_dataset = load_dataset('glue', 'stsb')
 
 # You can test on cpu using smaller models
 models = ['prajjwal1/bert-tiny',
@@ -14,18 +11,11 @@ models = ['prajjwal1/bert-tiny',
           'bert-base-uncased',
           ]
 
-# Initialize the ranker
-ranker = TransformerRanker(dataset=dataset,
-                           text_column=text_column,
-                           text_pair_column=text_pair_column,
-                           label_column=label_column,  # label column that holds floats
-                           )
+# Initialize the ranker, set the text pair column
+ranker = TransformerRanker(dataset=regression_dataset, text_pair_column="sentence2")
 
-# ... and run it
-result = ranker.run(models=models,
-                    batch_size=32,
-                    estimator="logme",  # use logme for regression tasks
-                    )
+# set transferability estimation to logme for regression tasks
+result = ranker.run(models=models, estimator="logme")
 
 # Print the scores
 print(result)

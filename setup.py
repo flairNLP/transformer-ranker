@@ -8,7 +8,7 @@ def read_requirements():
 
 setup(
     name='transformer-ranker',
-    version='0.1.0',
+    version='0.1.1',
     packages=find_packages(),
     description='Efficiently find the best-suited language model (LM) for your NLP task',
     long_description=open('README.md').read(),
@@ -17,5 +17,6 @@ setup(
     author_email='lukasgarba@gmail.com',
     url="https://github.com/flairNLP/transformer-ranker",
     install_requires=read_requirements(),
+    license='MIT',
     python_requires=">=3.8",
 )
