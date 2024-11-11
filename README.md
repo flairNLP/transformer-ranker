@@ -9,7 +9,7 @@ Developed at <a href="https://www.informatik.hu-berlin.de/en/forschung-en/gebiet
 <div align="center">
 <hr>
 
-[Quick Start](#quick-start) | [Demonstration Paper](https://arxiv.org/abs/2409.05997) | [Approach Paper](https://aclanthology.org/2024.findings-acl.757/)
+[Quick Start](#quick-start) | [Tutorials](#tutorials) | [Demonstration Paper](https://arxiv.org/abs/2409.05997) | [Approach Paper](https://aclanthology.org/2024.findings-acl.757/)
 
 </div>
 
