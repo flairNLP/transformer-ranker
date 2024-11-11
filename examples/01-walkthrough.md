@@ -5,11 +5,11 @@ This should be the first tutorial you do.
 
 Generally, finding the best LM for a specific task involves the following four steps: 
 
-1. [Loading Datasets](#Step-1.-Load-the-Dataset): Each task has a dataset. Load it from the Datasets library.
-2. [Preparing Language Models](#Step-2.-Compile-a-List-of-Language-Models): TransformerRanker requires a list of lanuage models to rank.
+1. [Loading Datasets](#Step-1-Load-the-Dataset): Each task has a dataset. Load it from the Datasets library.
+2. [Preparing Language Models](#Step-2-Compile-a-List-of-Language-Models): TransformerRanker requires a list of lanuage models to rank.
 You provide this list. 
-3. [Ranking Language Models](#Step-3.-Rank-LMs): Once the dataset and LM options are provided, you can now execute the ranking.
-4. [Interpreting Results](#Step-4.-Interpret-the-Results): When ranking is complete, you can select the best-suited model(s).
+3. [Ranking Language Models](#Step-3-Rank-LMs): Once the dataset and LM options are provided, you can now execute the ranking.
+4. [Interpreting Results](#Step-4-Interpret-the-Results): When ranking is complete, you can select the best-suited model(s).
 
 The goal of this tutorial is to understand these four steps. 
 
