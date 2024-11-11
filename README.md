@@ -85,9 +85,9 @@ Rank 2. bert-base-cased: 2.5137
 This indicates that the uncased variant of BERT is likely to perform better on CoNLL-03!
 
 
-## Example 2: Really find the best LM (by analyzing many LMs)
+## Example 2: Really find the best LM 
 
-The first example only chooses between two LMs. But in practical use cases, you might want to
+The first example was kept simple: we only chose between two LMs. But in practical use cases, you might want to
 choose between **dozens** of LMs. 
 
 To help you get started, we compiled two lists of popular LMs that in our opinion are good LMs to try:
@@ -98,13 +98,12 @@ To find the best LM for English NER among 17 base LMs, use the following snippet
 
 ```python3
 from datasets import load_dataset
-from transformer_ranker import TransformerRanker
+from transformer_ranker import TransformerRanker, prepare_popular_models
 
 # Step 1: Load the CoNLL-03 dataset from HuggingFace
 dataset = load_dataset('conll2003')
 
-# Step 2: Use our list of 'base' LMs as candidates to rank 
-from transformer_ranker import prepare_popular_models
+# Step 2: Use our list of 17 'base' LMs as candidates 
 language_models = prepare_popular_models('base')
 
 # Step 3: Initialize the ranker with the dataset 
@@ -151,8 +150,8 @@ downloading the models if you don't already have them locally).
 
 We provide **tutorials** to provide an introduction into the library and key concepts:
 
-1. [**Tutorial 1: Walkthrough**](examples/01-text-classification.md)
-2. [**Tutorial 2: Sequence Labeling**](examples/02-sequence-labeling.md)
+1. [**Tutorial 1: Library Walkthrough**](examples/01-walkthrough.md)
+2. [**Tutorial 2: Learn by Example**](examples/02-examples.md)
 3. [**Tutorial 3: More NLP Tasks**](examples/03-advanced.md)
 
 ## Cite

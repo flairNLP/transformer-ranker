@@ -1,16 +1,17 @@
-# Walkthrough
+# Tutorial 1: Library Walkthrough
 
 In this tutorial, we do a walkthrough of the main concepts and parameters in TransformerRanker. 
+This should be the first tutorial you do.
 
 Generally, finding the best LM for a specific task involves the following four steps: 
 
 1. [Loading Datasets](#Step-1.-Load-the-Dataset): Each task has a dataset. Load it from the Datasets library.
-2. [Preparing Language Models](#2-preparing-language-models): TransformerRanker requires a list of options to rank. 
-In the second step, you provide a list of all LMs that you want to rank. 
-3. [Ranking Language Models](#3-ranking-language-models): Once the dataset and LM options are provided, you can now execute the ranking.
-4. [Interpreting Results](#4-result-interpretation): When ranking is complete, you can select the best-suited model(s).
+2. [Preparing Language Models](#Step-2.-Compile-a-List-of-Language-Models): TransformerRanker requires a list of lanuage models to rank.
+You provide this list. 
+3. [Ranking Language Models](#Step-3.-Rank-LMs): Once the dataset and LM options are provided, you can now execute the ranking.
+4. [Interpreting Results](#Step-4.-Interpret-the-Results): When ranking is complete, you can select the best-suited model(s).
 
-We now look at each of these steps in detail.
+The goal of this tutorial is to understand these four steps. 
 
 ## Example Task 
 
@@ -42,7 +43,7 @@ print(results)
 
 Use Hugging Face’s Datasets library to load and access various text datasets.
 You can explore datasets in the [text classification](https://huggingface.co/datasets?task_categories=task_categories:text-classification&sort=trending) section on Hugging Face.
-You load a dataset by passing its string identified.
+You load a dataset by passing its string identifier.
 
 In this example, we use the TREC question classification dataset, which categorizes questions based on the type of information they seek.
 It comes with coarse and fine-grained question classes:
@@ -83,7 +84,7 @@ Key details to note:
 
 ## Step 2. Compile a List of Language Models
 
-Next, prepare a list of language models to assess for the downstream task.
+Next, prepare a list of language models to rank.
 You can choose any models from the [model hub](https://huggingface.co/models).
 If unsure where to start, use our predefined list of popular models:
 
@@ -104,9 +105,10 @@ The `language_models` list contains identifiers for each model:
 ```
 
 Feel free to create your own list of models. 
-We suggest exploring models that vary in pretraining tasks (e.g., masked language modeling, replaced token detection or sentence transformers) and those trained on different types of data (e.g., multilingual or domain-specific models).
+We suggest exploring models that vary in pretraining tasks (e.g., masked language modeling, replaced token detection or contrastive learning) 
+and those trained on different types of data (e.g., multilingual or domain-specific models).
 
-## 3. Rank LMs
+## Step 3. Rank LMs
 
 You have now selected a task with its dataset (TREC) and a list of LMs to rank. 
 
@@ -164,12 +166,12 @@ print(result)
 ### Optional: Specifying Labels
 
 ***Note:*** TREC has two sets of labels (fine-grained and coarse-grained). By default, TransformerRanker heuristically 
-determines, which field in the dataset is the label to use in ranking. In the care of TREC, it 
-uses the coarse-grained labels. 
+determines which field in the dataset is the label to use. In the case of TREC, it 
+automatically uses the coarse-grained labels. 
 
 But you can also directly indicate which field to use as labels by passing the `label_column`.
-For instance, if you want to find 
-the best LM for fine-grained question classification, use the following code: 
+For instance, if instead you want to find 
+the best LM for **fine-grained** question classification, use the following code: 
 
 ```python3
 from transformer_ranker import TransformerRanker
@@ -186,7 +188,7 @@ print(results)
 
 ### Running the Ranker
 
-The ranker logs steps to help you understand what happens as it runs.
+The ranker prints logs to help you understand what happens as it runs.
 It iterates over each model and (1) embeds texts, (2) scores embeddings using an estimator.
 Logs show which model is currently being assessed.
 
@@ -213,7 +215,7 @@ We used a GPU-enabled Colab Notebook with a Tesla T4.
 Keep in mind that TREC has short questions, averaging about 10 words each.
 For longer documents, embedding and scoring takes more time.
 
-## 4. Interpret the Results
+## Step 4. Interpret the Results
 
 The results are sorted in descending order.
 Transferability scores show how well each model suits your task.
@@ -243,10 +245,13 @@ Rank 17. google/electra-small-discriminator: 2.9615
 The model '_deberta-v3-base_' ranks the highest, making it a good starting point for fine-tuning.
 However, we recommend fine-tuning other highly ranked models for comparison.
 
+To fine-tune the top-ranked model, use a framework of your choice (e.g. 
+<a href="https://flairnlp.github.io/">Flair</a> or Transformers — we opt for the first one ;p).
+
 ## Summary
 
-This example showed how to use `transformer-ranker` to select the best-suited language model for the TREC question classification dataset.
+This tutorial explained the four steps for selecting the best-suited LM for an NLP task.
 We (1) loaded a text classification dataset, (2) selected language models, and (3) ranked them based on transferability scores.
-Now you can decide which models to fine-tune and which to skip.
 
-To fine-tune the top-ranked model, use a framework of your choice (e.g. Flair or Transformers—we opt for the first one ;p).
+In the next tutorial, we give examples for a variety of NLP tasks.
+

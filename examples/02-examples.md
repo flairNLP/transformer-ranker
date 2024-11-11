@@ -1,31 +1,67 @@
-# Sequence Labeling - PoS and NER
+# Examples
 
-This example shows how to rank language models for two sequence labeling tasks: Part-of-Speech tagging (PoS) and Named Entity Recognition (NER).
-We will load two token classification datasets and rank 17 language models using _transferability metrics_ to find the best-suited ones.
-Let's break it down into steps:
+The first tutorial provided a walkthrough of basic concepts in TransformerRanker.
 
-1. [Loading Datasets](#1-loading-and-inspecting-datasets): Load two token classification datasets using the Datasets library.
-2. [Preparing Language Models](#2-preparing-language-models): Choose from 17 language models, or create your own custom list.
-3. [Ranking Language Models](#3-ranking-language-models): Rank models for English PoS (Universal Dependencies) and NER (WNUT_17).
-4. [Interpreting Results](#4-result-interpretation): Review transferability scores to select the best-suited model for each dataset.
+In this tutorial, we give you many small usage examples. The idea is that you see TransformerRanker in 
+action for many different NLP tasks and some special cases. 
 
-<details> <summary>Complete code for ranking language models on UD's 'en_lines'<br> </summary>
+## Example 1: Named Entity Recognition (NER) on Tweets
+
+In this example, find the best-suited LMs for English NER on tweets. The full code is:
 
 ```python3
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker, prepare_popular_models
 
-# Load UD's 'en_lines' dataset
+# Load the WNUT-17 dataset of English tweets annotated with NER labels
+dataset_ner = load_dataset('leondz/wnut_17')
+
+# Load a list of popular 'base' models
+language_models = prepare_popular_models('base')
+
+# Initialize the Ranker, but also let it know what the text and label column is
+ranker_ner = TransformerRanker(dataset_ner,
+                               dataset_downsample=0.7,
+                               )
+
+results_ner = ranker_ner.run(language_models, batch_size=64)
+
+# Inspect results
+print(results_ner)
+```
+
+**Explanation**: This is essentially the same code as our introductory example. The only difference is that we downsample to 
+70% (instead of the default 20%). The reason for this is that WNUT-17 is already rather small so we don't need to
+downsample too much.
+
+If you run this code, you should get: 
+
+
+```console 
+```
+
+
+
+## Example 2: Part-of-Speech Tagging 
+
+In this example, we find the best-suited LMs for English part-of-speech tagging. The full code is:
+
+```python3
+from datasets import load_dataset
+from transformer_ranker import TransformerRanker, prepare_popular_models
+
+# Load the English part of the universal dependencies dataset
 dataset_pos = load_dataset('universal-dependencies/universal_dependencies', 'en_lines')
 
 # Load a list of popular 'base' models
 language_models = prepare_popular_models('base')
 
-# Initialize the Ranker
+# Initialize the Ranker, but also let it know what the text and label column is
 ranker = TransformerRanker(dataset_pos,
                            dataset_downsample=0.5,
-                           text_column="tokens",
-                           label_column="upos")
+                           text_column="tokens", # in this dataset, the text column is labeled "tokens"
+                           label_column="upos", # this dataset has many layers of annotation - we select "upos"
+                           )
 
 # ... and run it
 results = ranker.run(language_models, batch_size=64)
@@ -34,15 +70,25 @@ results = ranker.run(language_models, batch_size=64)
 print(results)
 ```
 
-</details>
+**Explanation**: This example is a bit more complicated since we use the Universal Dependencies (UD) dataset. UD contains
+many languages (English, German, Japanese, etc.) and annotates each sentence with many different layers of 
+annotation (part-of-speech, universal part-of-speech, lemmas, morphology, dependency trees, etc.). 
 
-## Setup and Installation
+Since there are so many layers of annotation, we need to tell TransformerRanker which defines the task we 
+want to solve. First, we print the dataset to understand it better: 
 
-Ensure Python 3.8 or later is installed, then install the package via pip:
+```python
+from datasets import load_dataset
 
-```bash
-pip install transformer-ranker
+# Load Universal Dependencies PoS dataset
+dataset_pos = load_dataset('universal-dependencies/universal_dependencies', 'en_lines')
+
+# Inspect the dataset
+print(dataset_pos)
 ```
+
+
+
 
 ## 1. Loading and Inspecting Datasets
 
