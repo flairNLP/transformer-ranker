@@ -6,7 +6,7 @@ from typing import Dict, List
 from transformers import logging as transformers_logging
 
 
-def prepare_popular_models(model_size='base') -> List[str]:
+def prepare_popular_models(model_size="base") -> List[str]:
     """Two lists of language models to try out"""
     base_models = [
         # English models
@@ -52,10 +52,12 @@ def prepare_popular_models(model_size='base') -> List[str]:
         "KISTI-AI/scideberta",
     ]
 
-    return large_models if model_size == 'large' else base_models
+    return large_models if model_size == "large" else base_models
 
 
-def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool = True) -> logging.Logger:
+def configure_logger(
+    name: str, level: int = logging.INFO, log_to_console: bool = True
+) -> logging.Logger:
     """
     Configure transformer-ranker logger.
 
@@ -70,7 +72,7 @@ def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool 
     if not logger.handlers and log_to_console:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(level)
-        console_handler.setFormatter(logging.Formatter('transformer_ranker:%(message)s'))
+        console_handler.setFormatter(logging.Formatter("transformer_ranker:%(message)s"))
         logger.addHandler(console_handler)
 
     # Ignore specific warning messages from transformers and datasets libraries
@@ -79,10 +81,12 @@ def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool 
     transformers_logging.set_verbosity_error()
 
     # Suppress transformers warning about unused prediction head weights if the model is frozen
-    logger.addFilter(lambda record: not (
-        "Some weights of BertModel were not initialized" in record.getMessage() or
-        "You should probably TRAIN this model" in record.getMessage()
-    ))
+    logger.addFilter(
+        lambda record: not (
+            "Some weights of BertModel were not initialized" in record.getMessage()
+            or "You should probably TRAIN this model" in record.getMessage()
+        )
+    )
 
     logger.propagate = False
     return logger
@@ -113,11 +117,11 @@ class Result:
     @property
     def top_three(self) -> Dict[str, float]:
         """Return three highest scoring models"""
-        return {k: self.results[k] for k in list(self.results.keys())[:min(3, len(self.results))]}
+        return {k: self.results[k] for k in list(self.results.keys())[: min(3, len(self.results))]}
 
     @property
     def best_layers(self) -> Dict[str, int]:
-        """Return a dictionary where each key is a model name and the value is the best layer's ID for that model."""
+        """Return a dictionary mapping each model name to its best layer ID."""
         best_layers_dict = {}
         for model, values in self.layerwise_scores.items():
             best_layer = max(values.items(), key=operator.itemgetter(1))[0]
@@ -132,13 +136,18 @@ class Result:
             self._results.update(additional_results.results)
             self.layerwise_scores.update(additional_results.layerwise_scores)
         else:
-            raise ValueError(f"Expected an instance of 'Result', but got {type(additional_results).__name__}. "
-                             f"Only 'Result' instances can be appended.")
+            raise ValueError(
+                f"Expected an instance of 'Result', but got {type(additional_results).__name__}. "
+                f"Only 'Result' instances can be appended."
+            )
 
     def _format_results(self) -> str:
         """Helper method to return sorted results as a formatted string."""
         sorted_results = sorted(self._results.items(), key=lambda item: item[1], reverse=True)
-        result_lines = [f"Rank {i + 1}. {model_name}: {score}" for i, (model_name, score) in enumerate(sorted_results)]
+        result_lines = [
+            f"Rank {i + 1}. {model_name}: {score}"
+            for i, (model_name, score) in enumerate(sorted_results)
+        ]
         return "\n".join(result_lines)
 
     def __str__(self) -> str:
