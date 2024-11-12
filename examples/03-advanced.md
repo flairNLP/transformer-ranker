@@ -1,18 +1,18 @@
 # Tutorial 3: Advanced
 
-The first two tutorials introduced how to load various text datasets and use the framework with default parameters.
-This tutorial expands on that by explaining how to select a different transferability metric and rank layers of a single LM using the TransformerRanker.
+The first two tutorials covered loading datasets and ranking LMs using default parameters.
+This one shows how to select a transferability metric and rank layers of a single model.
 
 ### Transferability Metrics 
 
-Transferability metrics help estimate how well a model can use knowledge from one task to perform another.
-For pre-trained language models (LMs), this involves estimating how well the extracted embeddings are suited for a downstream dataset.
-In TransformerRanker, we embed a dataset with different LMs and compare how well embeddings match the task labels.
-To score the embeddings, we use one of the three metrics:
+Transferability metrics estimate how well a model transfers knowledge from one task to another.
+For a pre-trained LM, this means assessing how well its embeddings align with a new dataset.
+In TransformerRanker, datasets are embedded with various LMs, and the embeddings are evaluated against task labels.
+Three different metrics are available for scoring the embeddings:
 
-- __k-Nearest Neighbors (k-NN)__: Uses distance metrics to measure how closely embeddings from the same class are clustered. We calculate pairwise distance matrix and exclude self-distances in the top _k_ search. [See k-NN code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/nearestneighbors.py).
-- __H-Score__: Measures the feature-wise variance between embeddings of different classes. High variance with low feature redundancy suggests strong transferability. [See H-Score code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/hscore.py).
-- __LogME__: Calculates the log marginal likelihood of a linear model fitted to embeddings. It optimizes two parameters, _alpha_ and _beta_, to adjust the model's regularization and the precision of the prior distribution. [See LogME code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/logme.py).
+- __k-Nearest Neighbors (k-NN)__: Uses distance metrics to measure how close embeddings from the same class are. Pairwise distances are calculated, excluding self-distances in the top _k_ search. [See k-NN code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/nearestneighbors.py).
+- __H-Score__: Measures the feature-wise variance between embeddings of different classes. High variance with low feature redundancy results in high transferability. [See H-Score code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/hscore.py).
+- __LogME__: Computes the log marginal likelihood of a linear model on embeddings, optimizing parameters _alpha_ and _beta_. [See LogME code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/logme.py).
 
 We use two state-of-the-art metrics: LogME and an improved H-Score with shrinkage-based adjustments to the covariance matrix calculation.
 To use LogME, set the `estimator` parameter when running the ranker:
@@ -28,7 +28,7 @@ result = ranker.run(language_models, estimator="logme", estimator="bestlayer")
 ```
 
 This configuration scores all layers of a language model and selects the one with the highest transferability score.
-Models are then ranked based on their best-performing layers for the dataset.
+Models are ranked based on their best-performing layers for the dataset.
 
 ### Layer Ranking
 
@@ -128,5 +128,5 @@ This was performed on a GPU-enabled (A100) Colab Notebook.
 
 ## Summary
 
-This markdown explains how to use two parameters: `estimator` and `layer_aggregator` when running the ranker. 
-The library also supports ranking layers of a single LM.
+This markdown explains how to use the `estimator` and `layer_aggregator` parameters when running the ranker.
+The library also supports ranking the layers of a single LM.
