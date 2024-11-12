@@ -152,7 +152,7 @@ We provide **tutorials** to provide an introduction into the library and key con
 
 1. [**Tutorial 1: Library Walkthrough**](examples/01-walkthrough.md)
 2. [**Tutorial 2: Learn by Example**](examples/02-examples.md)
-3. [**Tutorial 3: More NLP Tasks**](examples/03-advanced.md)
+3. [**Tutorial 3: Advanced**](examples/03-advanced.md)
 
 ## Cite
 
