@@ -30,20 +30,16 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
+      id: setup-python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
-    # Write the exact Python version to a file for cache-busting.
-    - run: |
-        echo "${{ steps.setup-python.outputs.python-version }}" > ".installed-python"
-
     - uses: "actions/cache@v4"
       id: "restore-cache"
       with:
-        key: "venv-${{ hashFiles('.installed-python', 'requirements.txt') }}"
-        path: |
-          .venv/
+        key: "venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}"
+        path: .venv/
 
     - name: "Create a virtual environment"
       if: "steps.restore-cache.outputs.cache-hit == false"
