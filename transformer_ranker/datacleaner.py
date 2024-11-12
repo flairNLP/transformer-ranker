@@ -176,7 +176,13 @@ class DatasetCleaner:
     def _merge_textpairs(dataset: Dataset, text_column: str, text_pair_column: str) -> Tuple[Dataset, str]:
         """Concatenate text pairs into a single text using separator token"""
         new_text_column_name = text_column + '+' + text_pair_column
+        print(dataset.column_names)
 
+        if text_pair_column not in dataset.column_names:
+            raise ValueError(
+                f"Text pair column name '{text_pair_column}' can not be found in the dataset. "
+                f"Use one of the following names for tex pair: {dataset.column_names}."
+            )
         def merge_texts(dataset_entry: Dict[str, str]) -> Dict[str, str]:
             dataset_entry[text_column] = dataset_entry[text_column] + " [SEP] " + dataset_entry[text_pair_column]
             dataset_entry[new_text_column_name] = dataset_entry.pop(text_column)
@@ -229,7 +235,7 @@ class DatasetCleaner:
             has_text = bool(text) and (not isinstance(text, list) or '\uFE0F' not in text)
 
             # Check if label is non-null and all elements are non-negative
-            valid_label = label is not None and (not isinstance(label, list) or all(value >= 0 for value in label))
+            valid_label = label is not None and (all(l >= 0 for l in label) if isinstance(label, list) else label >= 0)
 
             return has_text and valid_label
 
@@ -250,12 +256,18 @@ class DatasetCleaner:
 
     @staticmethod
     def _create_label_map(dataset: Dataset, label_column: str) -> Dict[str, int]:
-        """Try to find feature names in a hf dataset"""
+        """Try to find feature names in a hf dataset."""
         label_names = (
-                getattr(getattr(dataset.features[label_column], 'feature', None), 'names', None)
-                or getattr(dataset.features[label_column], 'names', None)
-                or sorted({str(label) for labels in dataset[label_column] for label in labels})
+            getattr(getattr(dataset.features[label_column], 'feature', None), 'names', None)
+            or getattr(dataset.features[label_column], 'names', None)
         )
+
+        # If label names are missing, create them manually
+        if not label_names:
+            label_names = sorted(
+                {str(label) for sublist in dataset[label_column]
+                 for label in (sublist if isinstance(sublist, list) else [sublist])}
+            )
 
         return {label: idx for idx, label in enumerate(label_names)}
 
