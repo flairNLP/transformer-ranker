@@ -72,3 +72,33 @@ def test_datacleaner(task_type, dataset_name, downsampling_ratio):
     labels = preprocessor.prepare_labels(dataset)
     assert isinstance(labels, torch.Tensor) and labels.size(0) > 0, "Labels tensor is empty"
     assert (labels >= 0).all(), f"Negative label found in dataset {dataset_name}"
+
+
+def test_simple_dataset():
+    original_dataset = Dataset.from_dict({
+        "text": ["", "This is a complete sentence.", "b", "c", "d", "e"],
+        "label": ["X", "Y", "Z", "X", "Y", "Z"],
+        "something_else": [0, 1, 2, 3, 4, 5]
+    })
+
+    preprocessor = DatasetCleaner(dataset_downsample=0.5, remove_empty_sentences=False)
+    dataset = preprocessor.prepare_dataset(original_dataset)
+
+    assert len(original_dataset) == 6
+    assert original_dataset.column_names == ["text", "label", "something_else"]
+
+    assert len(dataset) == 3
+    assert dataset.column_names == ["text", "label"]
+
+    preprocessor = DatasetCleaner(remove_empty_sentences=False)
+    dataset = preprocessor.prepare_dataset(original_dataset)
+
+    assert dataset["label"] == [0, 1, 2, 0, 1, 2]
+    assert original_dataset["label"] == ["X", "Y", "Z", "X", "Y", "Z"]
+
+    preprocessor = DatasetCleaner(remove_empty_sentences=True)
+    dataset = preprocessor.prepare_dataset(original_dataset)
+
+    # One row should have been removed in the processed dataset
+    assert dataset["label"] == [1, 2, 0, 1, 2]
+    assert original_dataset["label"] == ["X", "Y", "Z", "X", "Y", "Z"]
