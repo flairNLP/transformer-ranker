@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 import torch
 from datasets.dataset_dict import Dataset, DatasetDict
@@ -44,7 +44,7 @@ class TransformerRanker:
 
     def run(
         self,
-        models: List[Union[str, torch.nn.Module]],
+        models: list[Union[str, torch.nn.Module]],
         batch_size: int = 32,
         estimator: str = "hscore",
         layer_aggregator: str = "layermean",
@@ -166,7 +166,7 @@ class TransformerRanker:
 
     @staticmethod
     def _preload_transformers(
-        models: List[Union[str, torch.nn.Module]],
+        models: list[Union[str, torch.nn.Module]],
         device: torch.device,
     ) -> None:
         """Loads all models into HuggingFace cache"""

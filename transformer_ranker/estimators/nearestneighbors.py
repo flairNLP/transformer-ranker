@@ -41,7 +41,7 @@ class KNN:
 
             # Exclude self-distances by setting diagonal to a large number
             diag_indices = torch.arange(start, end, device=embeddings.device)
-            dists[diag_indices - start, diag_indices] = float('inf')
+            dists[diag_indices - start, diag_indices] = float("inf")
 
             # Indices of the k nearest neighbors for the batch
             batch_knn_indices = dists.topk(self.k, largest=False).indices

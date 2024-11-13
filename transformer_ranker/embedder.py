@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 import torch
 from tokenizers.pre_tokenizers import Whitespace
@@ -107,7 +107,7 @@ class Embedder:
         batch_size: int = 32,
         show_loading_bar: bool = True,
         move_embeddings_to_cpu: bool = True,
-    ) -> List[torch.Tensor]:
+    ) -> list[torch.Tensor]:
         """Split sentences into batches and embedd the full dataset"""
         if not isinstance(sentences, list):
             sentences = [sentences]
@@ -126,7 +126,7 @@ class Embedder:
 
         return embeddings
 
-    def embed_batch(self, sentences, move_embeddings_to_cpu: bool = True) -> List[torch.Tensor]:
+    def embed_batch(self, sentences, move_embeddings_to_cpu: bool = True) -> list[torch.Tensor]:
         """Embeds a batch of sentences and returns a list of sentence embeddings
         (list of word embeddings). Embeddings can be moved to cpu or kept on gpu"""
         tokenized_input = self.tokenize(sentences)
@@ -176,7 +176,7 @@ class Embedder:
 
         return sentence_embeddings
 
-    def _filter_layer_ids(self, layer_ids: str) -> List[int]:
+    def _filter_layer_ids(self, layer_ids: str) -> list[int]:
         """Transform a string with layer ids into a list of ints.
         Check if any ids are out-of-bounds of model size"""
         num_layers = self.num_transformer_layers
@@ -211,11 +211,11 @@ class Embedder:
 
         return batched_embeddings
 
-    def _pool_subwords(self, sentence_embedding, sentence_word_ids) -> List[torch.Tensor]:
+    def _pool_subwords(self, sentence_embedding, sentence_word_ids) -> list[torch.Tensor]:
         """Pool sub-word embeddings into word embeddings for a single sentence.
         Subword pooling methods: 'first', 'last', 'mean'"""
-        word_embeddings: List[torch.Tensor] = []
-        subword_embeddings: List[torch.Tensor] = []
+        word_embeddings: list[torch.Tensor] = []
+        subword_embeddings: list[torch.Tensor] = []
         previous_word_id: int = 0
 
         # Gather word-level embeddings as lists of sub-words

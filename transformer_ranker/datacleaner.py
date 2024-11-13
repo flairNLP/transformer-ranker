@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Optional, Tuple, Type, Union
+from typing import Optional, Type, Union
 
 import datasets
 import torch
@@ -22,7 +22,7 @@ class DatasetCleaner:
         task_type: Optional[str] = None,
         text_column: Optional[str] = None,
         label_column: Optional[str] = None,
-        label_map: Optional[Dict[str, int]] = None,
+        label_map: Optional[dict[str, int]] = None,
         text_pair_column: Optional[str] = None,
     ):
         """
@@ -145,7 +145,7 @@ class DatasetCleaner:
         )
         return torch.tensor(labels)
 
-    def prepare_sentences(self, dataset: Dataset) -> List[str]:
+    def prepare_sentences(self, dataset: Dataset) -> list[str]:
         """Gather sentences in the text column."""
         return dataset[self.text_column]
 
@@ -204,7 +204,7 @@ class DatasetCleaner:
                 f"Use one of the following names for tex pair: {dataset.column_names}."
             )
 
-        def merge_texts(dataset_entry: Dict[str, str]) -> Dict[str, str]:
+        def merge_texts(dataset_entry: dict[str, str]) -> dict[str, str]:
             dataset_entry[text_column] = (
                 dataset_entry[text_column] + " [SEP] " + dataset_entry[text_pair_column]
             )
@@ -273,7 +273,7 @@ class DatasetCleaner:
     @staticmethod
     def _make_labels_categorical(
         dataset: Dataset, label_column: str
-    ) -> tuple[Dataset, Dict[str, int]]:
+    ) -> tuple[Dataset, dict[str, int]]:
         """Convert string labels to integers"""
         unique_labels = sorted(set(dataset[label_column]))
         label_map = {label: idx for idx, label in enumerate(unique_labels)}
@@ -286,7 +286,7 @@ class DatasetCleaner:
         return dataset, label_map
 
     @staticmethod
-    def _create_label_map(dataset: Dataset, label_column: str) -> Dict[str, int]:
+    def _create_label_map(dataset: Dataset, label_column: str) -> dict[str, int]:
         """Try to find feature names in a hf dataset."""
         label_names = getattr(
             getattr(dataset.features[label_column], "feature", None), "names", None
@@ -306,8 +306,8 @@ class DatasetCleaner:
 
     @staticmethod
     def _change_bio_encoding(
-        dataset: Dataset, label_column: str, label_map: Dict[str, int]
-    ) -> tuple[Dataset, Dict[str, int]]:
+        dataset: Dataset, label_column: str, label_map: dict[str, int]
+    ) -> tuple[Dataset, dict[str, int]]:
         """Remove BIO prefixes from NER labels, update the dataset, and create a new label map."""
 
         # Get unique labels without BIO prefixes and create new label map
@@ -329,7 +329,7 @@ class DatasetCleaner:
         if label_map == new_label_map:
             logger.warning(
                 "Could not remove BIO prefixes for this tagging dataset. "
-                "Please add the label map as parameter label_map: Dict[str, int] = ... manually."
+                "Please add the label map as parameter label_map: dict[str, int] = ... manually."
             )
 
         return dataset, new_label_map
