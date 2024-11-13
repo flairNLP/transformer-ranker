@@ -34,7 +34,7 @@ class DatasetCleaner:
         :param change_bio_encoding: Convert BIO to single-class labels, removing B-, I-, O- prefix.
         :param remove_empty_sentences: Whether to remove empty sentences.
         :param dataset_downsample: Fraction to reduce the dataset size.
-        :param task_type: Task category "token classification", "text classification", "text regression".
+        :param task_type: "token classification", "text classification", or "text regression".
         :param text_column: Column name for texts.
         :param label_column: Column name for labels.
         :param label_map: A dictionary which maps label names to integers.
@@ -107,7 +107,7 @@ class DatasetCleaner:
             )
 
         # Convert string labels to integers
-        if label_type == str:
+        if isinstance(label_type, str):
             dataset, self.label_map = self._make_labels_categorical(dataset, label_column)
 
         # Try to find label map in the dataset
@@ -120,7 +120,10 @@ class DatasetCleaner:
                 dataset, label_column, self.label_map
             )
 
-        logger.info("Label map: %s", self.label_map)
+        # Keep only text and label columns
+        keep_columns = {text_column, self.text_pair_column, label_column} - {None}
+        columns_to_remove = list(set(dataset.column_names) - keep_columns)
+        dataset = dataset.remove_columns(columns_to_remove)
 
         # Set updated attributes and log them
         self.text_column = text_column
@@ -128,11 +131,6 @@ class DatasetCleaner:
         self.task_type = task_type
         self.dataset_size = len(dataset)
         self.log_dataset_info()
-
-        # Keep only text and label columns
-        keep_columns = {self.text_column, self.text_pair_column, self.label_column} - {None}
-        columns_to_remove = list(set(dataset.column_names) - keep_columns)
-        dataset = dataset.remove_columns(columns_to_remove)
 
         return dataset
 
@@ -160,7 +158,7 @@ class DatasetCleaner:
     @staticmethod
     def _find_text_and_label_columns(
         dataset: Dataset, text_column: Optional[str] = None, label_column: Optional[str] = None
-    ) -> Tuple[str, str, Type]:
+    ) -> tuple[str, str, Type]:
         """Find text and label columns in hf datasets based on common keywords"""
         text_columns = [
             "text", "sentence", "token", "tweet", "document", "paragraph", "description",
@@ -196,7 +194,7 @@ class DatasetCleaner:
     @staticmethod
     def _merge_textpairs(
         dataset: Dataset, text_column: str, text_pair_column: str
-    ) -> Tuple[Dataset, str]:
+    ) -> tuple[Dataset, str]:
         """Concatenate text pairs into a single text using separator token"""
         new_text_column_name = text_column + "+" + text_pair_column
 
@@ -244,7 +242,7 @@ class DatasetCleaner:
             example[text_column] = [token for token, _ in encoding]
             return example
 
-        dataset = dataset.map(pre_tokenize, num_proc=None, desc="Pre-tokenizing texts with Whitespace")
+        dataset = dataset.map(pre_tokenize, num_proc=None, desc="Whitespace pre-tokenization")
         return dataset
 
     @staticmethod
@@ -262,9 +260,10 @@ class DatasetCleaner:
             # Check if text is non-empty and does not contain emoji variation character '\uFE0F'
             has_text = bool(text) and (not isinstance(text, list) or "\uFE0F" not in text)
 
-            # Check if label is non-null and all elements are non-negative
+            # Check for empty and negative labels
             valid_label = label is not None and (
-                all(l >= 0 for l in label) if isinstance(label, list) else label >= 0
+                all(word_label >= 0 for word_label in label) if isinstance(label, list)
+                else label >= 0
             )
 
             return has_text and valid_label
@@ -274,7 +273,7 @@ class DatasetCleaner:
     @staticmethod
     def _make_labels_categorical(
         dataset: Dataset, label_column: str
-    ) -> Tuple[Dataset, Dict[str, int]]:
+    ) -> tuple[Dataset, Dict[str, int]]:
         """Convert string labels to integers"""
         unique_labels = sorted(set(dataset[label_column]))
         label_map = {label: idx for idx, label in enumerate(unique_labels)}
@@ -308,7 +307,7 @@ class DatasetCleaner:
     @staticmethod
     def _change_bio_encoding(
         dataset: Dataset, label_column: str, label_map: Dict[str, int]
-    ) -> Tuple[Dataset, Dict[str, int]]:
+    ) -> tuple[Dataset, Dict[str, int]]:
         """Remove BIO prefixes from NER labels, update the dataset, and create a new label map."""
 
         # Get unique labels without BIO prefixes and create new label map
@@ -337,8 +336,9 @@ class DatasetCleaner:
 
     def log_dataset_info(self) -> None:
         """Log information about dataset"""
-        logger.info("Texts and labels: '%s', '%s'", self.text_column, self.label_column)
-        logger.info("Task category: '%s'", self.task_type)
+        logger.info(f"Texts and labels: {self.text_column}, {self.label_column}")
+        logger.info(f"Label map: {self.label_map}")
         is_downsampled = self.dataset_downsample and self.dataset_downsample < 1.0
         downsample_info = f"(down-sampled to {self.dataset_downsample})" if is_downsampled else ""
-        logger.info("Dataset size: %s texts %s", self.dataset_size, downsample_info)
+        logger.info(f"Dataset size: {self.dataset_size} texts {downsample_info}")
+        logger.info(f"Task category: {self.task_type}")

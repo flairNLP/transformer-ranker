@@ -17,7 +17,7 @@ class Embedder:
         sentence_pooling: Optional[str] = None,
         use_pretokenizer: bool = True,
         local_files_only: bool = False,
-        device: Optional[str] = None,
+        device: Optional[Union[str, torch.device]] = None
     ):
         """
         Embed texts using a pre-trained transformer model. It's a word-level embedder, where
@@ -71,11 +71,8 @@ class Embedder:
         self.layer_pooling = layer_pooling
         self.sentence_pooling = sentence_pooling
 
-        # Set cpu or gpu device
-        if device is None:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        else:
-            self.device = torch.device(device)
+        # Move model to device
+        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.model = self.model.to(self.device)
 
     def tokenize(self, sentences):
@@ -130,9 +127,8 @@ class Embedder:
         return embeddings
 
     def embed_batch(self, sentences, move_embeddings_to_cpu: bool = True) -> List[torch.Tensor]:
-        """Embeds a batch of sentences and returns a list of sentence embeddings that
-        consist of different numbers of word-level embeddings"""
-        # Tokenize with auto tokenizer
+        """Embeds a batch of sentences and returns a list of sentence embeddings
+        (list of word embeddings). Embeddings can be moved to cpu or kept on gpu"""
         tokenized_input = self.tokenize(sentences)
 
         # Move inputs to gpu
@@ -180,24 +176,23 @@ class Embedder:
 
         return sentence_embeddings
 
-    def _filter_layer_ids(self, layer_ids) -> List[int]:
-        """Transform a string with layer ids into a list of ints and
-        remove ids that are out of bound of the actual transformer size"""
+    def _filter_layer_ids(self, layer_ids: str) -> List[int]:
+        """Transform a string with layer ids into a list of ints.
+        Check if any ids are out-of-bounds of model size"""
+        num_layers = self.num_transformer_layers
         if layer_ids == "all":
-            return [-i for i in range(1, self.num_transformer_layers + 1)]
+            new_layer_ids = [-i for i in range(1, num_layers + 1)]
+        else:
+            new_layer_ids = [int(number) for number in layer_ids.split(",")]
+            new_layer_ids = [layer_id for layer_id in new_layer_ids if abs(layer_id) <= num_layers]
 
-        layer_ids = [int(number) for number in layer_ids.split(",")]
-        layer_ids = [
-            layer_id for layer_id in layer_ids if self.num_transformer_layers >= abs(layer_id)
-        ]
-
-        if not layer_ids:
+        if not new_layer_ids:
             raise ValueError(
-                f'"layer_ids" are out of bounds for the model size. '
-                f"Num layers in model {self.model_name}: {self.num_transformer_layers}"
+                f'Given layer_ids are out of bounds for the model size. '
+                f"Num layers in model {self.model_name}: {num_layers}"
             )
 
-        return layer_ids
+        return new_layer_ids
 
     def _extract_relevant_layers(self, batched_embeddings: torch.Tensor) -> torch.Tensor:
         """Keep only relevant layers in each embedding and apply layer-wise pooling if required"""
@@ -223,20 +218,19 @@ class Embedder:
         subword_embeddings: List[torch.Tensor] = []
         previous_word_id: int = 0
 
-        # Gather word-level embeddings as lists of subwords
+        # Gather word-level embeddings as lists of sub-words
         for token_embedding, word_id in zip(sentence_embedding, sentence_word_ids):
 
-            # Append a word (stack all subwords into a word tensor)
+            # Stack all sub-words into a word tensor
             if previous_word_id != word_id and subword_embeddings:
                 word_embeddings.append(torch.stack(subword_embeddings, dim=0))
                 subword_embeddings = []
 
-            # Gather subword tokens into a single word
             if word_id is not None:
                 subword_embeddings.append(token_embedding)
                 previous_word_id = word_id
 
-        # Append the last word (some tokenizers don't have 'end of sequence' token)
+        # Add last word as some tokenizers don't have 'end of sequence' token
         if subword_embeddings:
             word_embeddings.append(torch.stack(subword_embeddings, dim=0))
 
@@ -270,7 +264,7 @@ class Embedder:
         if self.sentence_pooling == "last":
             sentence_embedding = word_embeddings[-1]
 
-        # Weight words by last word having the lowest importance: slightly better option for Causal LMs
+        # Weight words by last word having lower importance: can be better for Causal LMs
         if self.sentence_pooling == "weighted_mean":
             weights = torch.linspace(0.9, 0.1, steps=len(word_embeddings))
             weights /= weights.sum()
