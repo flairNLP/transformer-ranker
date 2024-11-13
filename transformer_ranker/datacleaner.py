@@ -71,9 +71,6 @@ class DatasetCleaner:
                 "or Dataset (for a single split) to be preprocessed."
             )
 
-        # Clone the dataset to avoid changing the original one
-        dataset = dataset.map(lambda x: x, load_from_cache_file=False, desc="Cloning dataset")
-
         if self.merge_data_splits and isinstance(dataset, DatasetDict):
             dataset = self._merge_data_splits(dataset)
 
@@ -89,7 +86,12 @@ class DatasetCleaner:
             task_type = self.task_type
 
         if self.remove_empty_sentences:
-            dataset = self._remove_empty_rows(dataset, text_column, label_column)
+            dataset = self._remove_empty_rows(
+                dataset,
+                text_column,
+                label_column,
+                is_regression=task_type == "text regression"
+            )
 
         if self.dataset_downsample:
             dataset = self._downsample(dataset, ratio=self.dataset_downsample)
@@ -251,21 +253,34 @@ class DatasetCleaner:
         return datasets.concatenate_datasets(list(dataset.values()))
 
     @staticmethod
-    def _remove_empty_rows(dataset: Dataset, text_column: str, label_column: str) -> Dataset:
+    def _remove_empty_rows(dataset: Dataset, text_column: str, label_column: str, is_regression: bool) -> Dataset:
         """Filter out entries with empty or noisy text or labels."""
 
         def is_valid_entry(sample) -> bool:
             text, label = sample[text_column], sample[label_column]
 
-            # Check if text is non-empty and does not contain emoji variation character '\uFE0F'
-            has_text = bool(text) and (not isinstance(text, list) or "\uFE0F" not in text)
+            # Check if text is non-empty 
+            if not text or not label:
+                return False
 
-            # Check if label is non-null and all elements are non-negative
-            valid_label = label is not None and (
-                all(l >= 0 for l in label) if isinstance(label, list) else label >= 0
-            )
+            if not isinstance(text, list):
+                text = [text]
 
-            return has_text and valid_label
+            # check the text does not contain emoji variation character '\uFE0F'
+            _BAD_CHARACTERS = "\uFE0F"
+
+            if any(c in t for t in text for c in _BAD_CHARACTERS):
+                return False
+
+            if not is_regression:
+                # Check that the labels are non-negative
+                if not isinstance(label, list):
+                    label = [label]
+
+                if any(word_label < 0 for word_label in label):
+                    return False
+
+            return True
 
         return dataset.filter(is_valid_entry, desc="Removing empty rows")
 
