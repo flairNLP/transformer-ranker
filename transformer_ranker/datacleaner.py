@@ -64,8 +64,6 @@ class DatasetCleaner:
         # Load huggingface dataset
         if isinstance(dataset, str):
             dataset = datasets.load_dataset(dataset, trust_remote_code=True)
-        else:
-            dataset = dataset
 
         if not isinstance(dataset, (DatasetDict, Dataset)):
             raise ValueError(
@@ -107,7 +105,7 @@ class DatasetCleaner:
             )
 
         # Convert string labels to integers
-        if label_type == str:
+        if label_type is str:
             dataset, self.label_map = self._make_labels_categorical(dataset, label_column)
 
         # Try to find label map in the dataset
