@@ -20,22 +20,27 @@ class LogME:
         initial_alpha: float = 1.0,
         initial_beta: float = 1.0,
         max_iter: int = 11,
-        tol: float = 1e-3
+        tol: float = 1e-3,
     ) -> float:
         """
-        LogME intuition: estimate the evidence for embeddings by iteratively optimizing the prior (alpha) and
-        likelihood (beta), projecting the target labels onto the singular vectors of the feature matrix.
+        LogME intuition: estimate the evidence for embeddings by iteratively optimizing
+        the prior (alpha) and likelihood (beta), projecting the target labels onto the singular
+        vectors of the feature matrix.
 
         :param embeddings: Embedding matrix of shape (num_samples, hidden_dim)
         :param labels: Label vector of shape (num_samples,)
-        :param alpha: Initial precision of the prior (controls the regularization strength)
-        :param beta: Initial precision of the likelihood (controls the noise in the data)
+        :param initial_alpha: Initial precision of the prior (controls the regularization strength)
+        :param initial_beta: Initial precision of the likelihood (controls the noise in the data)
         :param tol: Tolerance for the optimization convergence
         :param max_iter: Maximum iterations to optimize alpha and beta
         :return: LogME score, where higher is better
         """
         embeddings = embeddings.to(torch.float64)
-        labels = labels.to(torch.float64).unsqueeze(-1) if self.regression and labels.dim() == 1 else labels
+        labels = (
+            labels.to(torch.float64).unsqueeze(-1)
+            if self.regression and labels.dim() == 1
+            else labels
+        )
 
         # Get the number of samples, number of classes, and the hidden size
         num_samples, hidden_size = embeddings.shape
@@ -46,7 +51,7 @@ class LogME:
         u, singular_values, v_transpose = torch.linalg.svd(embeddings, full_matrices=False)
 
         # Compute sigma which is the square of singular values
-        sigma = (singular_values.reshape(-1, 1) ** 2)
+        sigma = singular_values.reshape(-1, 1) ** 2
 
         evidence_sum = 0.0
 
@@ -55,26 +60,32 @@ class LogME:
 
         # Loop over each class (for classification) or each target column (for regression)
         for i in range(num_classes):
-            # For classification create a one-hot vector, for regression, use the corresponding column of labels
-            labels_ = labels[:, i] if self.regression else (labels == class_names[i]).to(torch.float64)
+            # Use one-hot vectors for classification and label columns for regression
+            labels_ = (
+                labels[:, i] if self.regression else (labels == class_names[i]).to(torch.float64)
+            )
             labels_ = labels_.unsqueeze(-1)
 
             # Project labels onto the singular vectors (x)
             projected_labels = u.T @ labels_
-            projected_labels_squared = projected_labels ** 2
+            projected_labels_squared = projected_labels**2
 
-            # Compute residual sum of squares. If k < hidden_size, we compute sum of xi for 0 singular values directly
-            residual_sum_squares = (labels_ ** 2).sum() - projected_labels_squared.sum()
+            # Residual sum of squares; if k < hidden_size, sum xi for zero singular values
+            residual_sum_squares = (labels_**2).sum() - projected_labels_squared.sum()
 
             residual_error = torch.tensor(0.0)
             precision_weighted_sum = torch.tensor(0.0)
 
             # Iteratively update alpha and beta until convergence or maximum iterations
             for _ in range(max_iter):
-                tau = alpha / beta  # Ratio of alpha to beta, representing the noise-to-signal ratio
+                tau = alpha / beta  # Alpha-to-beta ratio, representing noise-to-signal
                 gamma = (sigma / (sigma + tau)).sum()
-                precision_weighted_sum = (sigma * projected_labels_squared / ((tau + sigma) ** 2)).sum()
-                residual_error = (projected_labels_squared / ((1 + sigma / tau) ** 2)).sum() + residual_sum_squares
+                precision_weighted_sum = (
+                    sigma * projected_labels_squared / ((tau + sigma) ** 2)
+                ).sum()
+                residual_error = (
+                    projected_labels_squared / ((1 + sigma / tau) ** 2)
+                ).sum() + residual_sum_squares
 
                 # Update alpha (prior precision) and beta (likelihood precision)
                 alpha = gamma / (precision_weighted_sum + 1e-5)
@@ -86,12 +97,14 @@ class LogME:
                     break
 
             # Compute evidence using optimized alpha and beta
-            evidence = (hidden_size / 2.0 * torch.log(alpha)
-                        + num_samples / 2.0 * torch.log(beta)
-                        - 0.5 * torch.sum(torch.log(alpha + beta * sigma))
-                        - beta / 2.0 * residual_error
-                        - alpha / 2.0 * precision_weighted_sum
-                        - num_samples / 2.0 * torch.log(torch.tensor(2 * torch.pi)))
+            evidence = (
+                hidden_size / 2.0 * torch.log(alpha)
+                + num_samples / 2.0 * torch.log(beta)
+                - 0.5 * torch.sum(torch.log(alpha + beta * sigma))
+                - beta / 2.0 * residual_error
+                - alpha / 2.0 * precision_weighted_sum
+                - num_samples / 2.0 * torch.log(torch.tensor(2 * torch.pi))
+            )
             evidence /= num_samples
 
             # Sum the evidence for each class

@@ -12,9 +12,9 @@ class HScore:
 
     def fit(self, embeddings: torch.Tensor, labels: torch.Tensor) -> float:
         """
-        H-score intuition: Higher variance between embeddings of different classes (mean vectors for each class)
-        and lower feature redundancy (i.e. inverse of the covariance matrix for all data points)
-        lead to better transferability.
+        H-score intuition: Higher variance between embeddings of different classes
+        (mean vectors for each class) and lower feature redundancy (i.e. inverse of the covariance
+        matrix for all data points) lead to better transferability.
 
         :param embeddings: Embedding matrix of shape (num_samples, hidden_size)
         :param labels: Label vector of shape (num_samples,)
@@ -33,11 +33,11 @@ class HScore:
         cov_matrix = torch.mm(embeddings.T, embeddings) / num_samples
 
         # Compute beta and delta for the Ledoit-Wolf shrinkage
-        squared_features = embeddings ** 2
+        squared_features = embeddings**2
         emp_cov_trace = torch.sum(squared_features, dim=0) / num_samples
         mean_cov = torch.sum(emp_cov_trace) / hidden_size
         beta_ = torch.sum(torch.mm(squared_features.T, squared_features)) / num_samples
-        delta_ = torch.sum(cov_matrix ** 2)
+        delta_ = torch.sum(cov_matrix**2)
         beta = (beta_ - delta_) / (hidden_size * num_samples)
         delta = delta_ - 2.0 * mean_cov * emp_cov_trace.sum() + hidden_size * mean_cov**2
         delta /= hidden_size
@@ -51,7 +51,9 @@ class HScore:
         pinv_covf_alpha = torch.linalg.pinv(covf_alpha, rcond=1e-15)
 
         # Matrix of class-conditioned means
-        class_means = torch.zeros(num_classes, hidden_size, dtype=torch.float64, device=embeddings.device)
+        class_means = torch.zeros(
+            num_classes, hidden_size, dtype=torch.float64, device=embeddings.device
+        )
         for i, cls in enumerate(classes):
             mask = labels == cls
             class_features = embeddings[mask].mean(dim=0)

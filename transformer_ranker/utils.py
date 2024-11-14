@@ -1,12 +1,11 @@
 import logging
 import operator
 import warnings
-from typing import Dict, List
 
 from transformers import logging as transformers_logging
 
 
-def prepare_popular_models(model_size="base") -> List[str]:
+def prepare_popular_models(model_size="base") -> list[str]:
     """Two lists of language models to try out"""
     base_models = [
         # English models
@@ -100,11 +99,11 @@ class Result:
         param metric: metric name (e.g. "hscore", or "logme")
         """
         self.metric = metric
-        self._results: Dict[str, float] = {}
-        self.layerwise_scores: Dict[str, Dict[int, float]] = {}
+        self._results: dict[str, float] = {}
+        self.layerwise_scores: dict[str, dict[int, float]] = {}
 
     @property
-    def results(self) -> Dict[str, float]:
+    def results(self) -> dict[str, float]:
         """Return the result dictionary sorted by scores in descending order"""
         return dict(sorted(self._results.items(), key=lambda x: x[1], reverse=True))
 
@@ -115,12 +114,12 @@ class Result:
         return model_name
 
     @property
-    def top_three(self) -> Dict[str, float]:
+    def top_three(self) -> dict[str, float]:
         """Return three highest scoring models"""
         return {k: self.results[k] for k in list(self.results.keys())[: min(3, len(self.results))]}
 
     @property
-    def best_layers(self) -> Dict[str, int]:
+    def best_layers(self) -> dict[str, int]:
         """Return a dictionary mapping each model name to its best layer ID."""
         best_layers_dict = {}
         for model, values in self.layerwise_scores.items():

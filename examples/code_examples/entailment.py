@@ -2,16 +2,17 @@ from datasets import load_dataset
 from transformer_ranker import TransformerRanker
 
 # Load 'rte' Recognizing Textual Entailment dataset
-entailment_dataset = load_dataset('glue', 'rte')
+entailment_dataset = load_dataset("glue", "rte")
 
 # Use smaller models to run on CPU
-language_models = ['prajjwal1/bert-tiny',
-                   'google/electra-small-discriminator',
-                   'microsoft/deberta-v3-small',
-                   'bert-base-uncased',
-                   ]
+language_models = [
+    "prajjwal1/bert-tiny",
+    "google/electra-small-discriminator",
+    "microsoft/deberta-v3-small",
+    "bert-base-uncased",
+]
 
-# Initialize the ranker, set text_pair_column
+# Initialize the ranker, set column for text pairs
 ranker = TransformerRanker(dataset=entailment_dataset, text_pair_column="sentence2")
 
 # ... and run it
