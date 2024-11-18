@@ -19,7 +19,7 @@ Developed at <a href="https://www.informatik.hu-berlin.de/en/forschung-en/gebiet
 But which one of them is best for your NLP classification task? 
 Since fine-tuning LMs is costly, it is not possible to try them all!  
 
-**The solution**: *Tranferability estimation* with TransformerRanker!
+**The solution**: *Transferability estimation* with TransformerRanker!
 
 ---
 TransformerRanker is a library that
