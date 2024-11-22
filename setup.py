@@ -18,5 +18,5 @@ setup(
     url="https://github.com/flairNLP/transformer-ranker",
     install_requires=read_requirements(),
     license='MIT',
-    python_requires=">=3.8",
+    python_requires=">=3.9",
 )
