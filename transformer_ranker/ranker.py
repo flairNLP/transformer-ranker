@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import torch
 from datasets.dataset_dict import Dataset, DatasetDict
@@ -23,28 +23,27 @@ class TransformerRanker:
         **kwargs,
     ):
         """
-        Rank language models for various NLP tasks. Extract embeddings and evaluate
-        their suitability for a dataset using metrics like hscore or logme.
-        Embeddings can be averaged across all layers or selected from the best-suited layer.
+        Rank language models for different NLP tasks. Embed a part of the dataset and
+        estimate embedding suitability with transferability metrics like hscore or logme.
+        Embeddings can be averaged across all layers or selected from the best-performing layer.
 
         :param dataset: a dataset from huggingface, containing texts and label columns.
         :param dataset_downsample: a fraction to which the dataset should be reduced.
         :param kwargs: Additional dataset-specific parameters for data cleaning.
         """
-        self.data_cleaner = DatasetCleaner(
+        # Clean the original dataset and keep only needed columns
+        datacleaner = DatasetCleaner(
             dataset_downsample=dataset_downsample,
             text_column=text_column,
             label_column=label_column,
             **kwargs,
         )
 
-        # Prepare dataset, identify task category
-        self.dataset = self.data_cleaner.prepare_dataset(dataset)
-        self.task_type = self.data_cleaner.task_type
+        self.dataset = datacleaner.prepare_dataset(dataset)
 
     def run(
         self,
-        models: list[Union[str, torch.nn.Module]],
+        models: List[Union[str, torch.nn.Module]],
         batch_size: int = 32,
         estimator: str = "hscore",
         layer_aggregator: str = "layermean",
@@ -54,30 +53,25 @@ class TransformerRanker:
         **kwargs,
     ):
         """
-        Load models, get embeddings, score them, and rank results.
+        Load models, get embeddings, score, and rank results.
 
         :param models: A list of model names string identifiers
         :param batch_size: The number of samples to process in each batch, defaults to 32.
-        :param estimator: Transferability metric: 'hscore', 'logme', 'knn'
-        :param layer_aggregator: Which layers to use 'layermean', 'bestlayer'
-        :param sentence_pooling: Pool words into a sentence embedding for text classification.
-        :param device: Device for language models ('cpu', 'cuda', 'cuda:2')
-        :param gpu_estimation: If to score embeddings on the same device (defaults to true)
+        :param estimator: Transferability metric (e.g., 'hscore', 'logme', 'knn').
+        :param layer_aggregator: Which layer to select (e.g., 'layermean', 'bestlayer').
+        :param sentence_pooling: Embedder parameter for pooling words into a sentence embedding for
+        text classification tasks. Defaults to "mean" to average of all words.
+        :param device: Device for embedding, defaults to GPU if available ('cpu', 'cuda', 'cuda:2').
+        :param gpu_estimation: Store and score embeddings on GPU for speedup.
         :param kwargs: Additional parameters for the embedder class (e.g. subword pooling)
         :return: Returns the sorted dictionary of model names and their scores
         """
         self._confirm_ranker_setup(estimator=estimator, layer_aggregator=layer_aggregator)
 
-        # Set device for language model embeddings and log it
-        device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
-        logger.info(f"Running on {device}")
-
         # Load all transformers into hf cache
         self._preload_transformers(models, device)
 
-        # Prepare texts and labels from the dataset
-        texts = self.data_cleaner.prepare_sentences(self.dataset)
-        labels = self.data_cleaner.prepare_labels(self.dataset)
+        labels = self.dataset.labels()
 
         ranking_results = Result(metric=estimator)
 
@@ -89,7 +83,7 @@ class TransformerRanker:
 
             # Sentence pooling is only applied for text classification tasks
             effective_sentence_pooling = (
-                None if self.task_type == "token classification" else sentence_pooling
+                None if self.dataset.task_category == "token classification" else sentence_pooling
             )
 
             embedder = Embedder(
@@ -102,14 +96,14 @@ class TransformerRanker:
             )
 
             embeddings = embedder.embed(
-                sentences=texts,
+                self.dataset.texts(),
                 batch_size=batch_size,
                 show_loading_bar=True,
                 move_embeddings_to_cpu=not gpu_estimation,
             )
 
             # Single list of embeddings for sequence tagging tasks
-            if self.task_type == "token classification":
+            if self.dataset.task_category == "token classification":
                 embeddings = [word for sentence in embeddings for word in sentence]
 
             model_name = embedder.model_name
@@ -150,7 +144,7 @@ class TransformerRanker:
                 zip(embedded_layer_ids, layer_scores)
             )
 
-            # Layer average gives one score, bestlayer uses max of scores
+            # Aggregate layer scores
             final_score = max(layer_scores) if layer_aggregator == "bestlayer" else layer_scores[0]
             ranking_results.add_score(model_name, final_score)
 
@@ -158,7 +152,7 @@ class TransformerRanker:
             result_log = f"{model_name} estimation: {final_score} ({ranking_results.metric})"
 
             if layer_aggregator == "bestlayer":
-                result_log += f", layer scores: {ranking_results.layerwise_scores[model_name]}"
+                result_log += f", layerwise scores: {ranking_results.layerwise_scores[model_name]}"
 
             logger.info(result_log)
 
@@ -166,8 +160,7 @@ class TransformerRanker:
 
     @staticmethod
     def _preload_transformers(
-        models: list[Union[str, torch.nn.Module]],
-        device: torch.device,
+        models: List[Union[str, torch.nn.Module]], device: Optional[str] = None
     ) -> None:
         """Loads all models into HuggingFace cache"""
         cached_models, download_models = [], []
@@ -201,14 +194,14 @@ class TransformerRanker:
             )
 
         valid_task_types = ["text classification", "token classification", "text regression"]
-        if self.task_type not in valid_task_types:
+        if self.dataset.task_category not in valid_task_types:
             raise ValueError(
                 "Unable to determine task type of the dataset. Please specify it as a parameter: "
                 'task_type= "text classification", "token classification", or '
                 '"text regression"'
             )
 
-        if self.task_type == "text regression" and estimator == "hscore":
+        if self.dataset.task_category == "text regression" and estimator == "hscore":
             supported_estimators = [est for est in valid_estimators if est != "hscore"]
             raise ValueError(
                 f'"{estimator}" does not support text regression. '
@@ -218,8 +211,8 @@ class TransformerRanker:
     def _estimate_score(self, estimator, embeddings: torch.Tensor, labels: torch.Tensor) -> float:
         """Use an estimator to score a transformer"""
         estimator_classes = {
-            "knn": KNN(k=3, regression=(self.task_type == "text regression")),
-            "logme": LogME(regression=(self.task_type == "text regression")),
+            "knn": KNN(k=3, regression=(self.dataset.task_category == "text regression")),
+            "logme": LogME(regression=(self.dataset.task_category == "text regression")),
             "hscore": HScore(),
         }
 
