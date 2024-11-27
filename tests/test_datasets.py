@@ -25,30 +25,21 @@ def test_datacleaner(task_type, dataset_name, downsampling_ratio):
 
     dataset = load_dataset(dataset_name, trust_remote_code=True)
     datacleaner = DatasetCleaner(dataset_downsample=downsampling_ratio)
-    dataset = datacleaner.prepare_dataset(dataset)
+    texts, labels, task_category = datacleaner.prepare_dataset(dataset)
 
-    # Test dataset preprocessing
-    assert isinstance(dataset, Dataset), f"Dataset '{dataset_name}' is not a valid Dataset object"
-
-    assert dataset.task_category == task_type, (
-        f"Task type mismatch: expected '{task_type}', got '{dataset.task_category}'"
+    assert task_category == task_type, (
+        f"Task type mismatch: expected '{task_type}', got '{task_category}'"
         f"in dataset '{dataset_name}'"
     )
 
-    # Make sure text and label columns were found
-    assert dataset.text_column is not None, f"Text column not found in dataset {dataset_name}"
-    assert dataset.label_column is not None, f"Label column not found in dataset {dataset_name}"
-
-    # Prepare texts using .texts()
-    sentences = dataset.texts()
-    assert isinstance(sentences, list) and len(sentences) > 0, (
+    assert isinstance(texts, list) and len(texts) > 0, (
         "Sentences/tokens list is empty in dataset %s", dataset_name
     )
 
     # Ensure the sentences are in the correct format
     # (str for text-classification, List[str] for token-level)
     if task_type == "text classification":
-        for sentence in sentences:
+        for sentence in texts:
             assert isinstance(sentence, str), (
                 f"Incorrect sentence type in dataset '{dataset_name}', all expected to be str "
                 f"but some sentences have different type ({type(sentence)})."
@@ -58,7 +49,7 @@ def test_datacleaner(task_type, dataset_name, downsampling_ratio):
             assert sentence != "", f"Empty sentence found in dataset {dataset_name}"
 
     elif task_type == "token classification":
-        for sentence in sentences:
+        for sentence in texts:
             # For token classification, make sure there is no empty lists of tokens
             assert len(sentence) >= 0,  f"Empty token list found in dataset {dataset_name}"
 
@@ -72,7 +63,6 @@ def test_datacleaner(task_type, dataset_name, downsampling_ratio):
         raise KeyError(msg)
 
     # Test the label column in each dataset
-    labels = dataset.labels()
     assert isinstance(labels, torch.Tensor) and labels.size(0) > 0, "Labels tensor is empty"
     assert (labels >= 0).all(), f"Negative label found in dataset {dataset_name}"
 
@@ -85,23 +75,20 @@ def test_simple_dataset():
     })
 
     preprocessor = DatasetCleaner(dataset_downsample=0.5, cleanup_rows=False)
-    dataset = preprocessor.prepare_dataset(original_dataset)
+    texts, labels, task_category = preprocessor.prepare_dataset(original_dataset)
 
     assert len(original_dataset) == 6
-    assert original_dataset.column_names == ["text", "label", "something_else"]
-
-    assert len(dataset) == 3
-    assert dataset.column_names == ["text", "label"]
+    assert len(texts) == len(labels) == 3  # after downsampling
 
     preprocessor = DatasetCleaner(cleanup_rows=False)
-    dataset = preprocessor.prepare_dataset(original_dataset)
+    texts, labels, task_category = preprocessor.prepare_dataset(original_dataset)
 
-    assert dataset["label"] == [0, 1, 2, 0, 1, 2]
     assert original_dataset["label"] == ["X", "Y", "Z", "X", "Y", "Z"]
+    assert torch.equal(labels, torch.tensor([0, 1, 2, 0, 1, 2]))
 
     preprocessor = DatasetCleaner(cleanup_rows=True)
-    dataset = preprocessor.prepare_dataset(original_dataset)
+    texts, labels, task_category = preprocessor.prepare_dataset(original_dataset)
 
     # One row should have been removed in the processed dataset
-    assert dataset["label"] == [1, 2, 0, 1, 2]
     assert original_dataset["label"] == ["X", "Y", "Z", "X", "Y", "Z"]
+    assert torch.equal(labels, torch.tensor([1, 2, 0, 1, 2]))
