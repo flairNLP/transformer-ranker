@@ -1,5 +1,7 @@
 import logging
-from typing import Optional, Type, Union
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional, Union
 
 import datasets
 import torch
@@ -11,234 +13,296 @@ from .utils import configure_logger
 logger = configure_logger("transformer_ranker", logging.INFO)
 
 
-class DatasetCleaner:
-    def __init__(
-        self,
-        pre_tokenizer: Optional[Whitespace] = None,
-        merge_data_splits: bool = True,
-        remove_empty_sentences: bool = True,
-        change_bio_encoding: bool = True,
-        dataset_downsample: Optional[float] = None,
-        task_type: Optional[str] = None,
-        text_column: Optional[str] = None,
-        label_column: Optional[str] = None,
-        label_map: Optional[dict[str, int]] = None,
-        text_pair_column: Optional[str] = None,
-    ):
-        """
-        Prepare huggingface dataset. Identify task category, find text and label columns,
-        merge data splits, down-sample, prepare texts and labels.
+class TaskCategory(str, Enum):
+    """Supported task categories"""
+    TOKEN_CLASSIFICATION = "token classification"
+    TEXT_CLASSIFICATION = "text classification"
+    TEXT_REGRESSION = "text regression"
 
-        :param pre_tokenizer: Pre-tokenizer to use, such as Whitespace from huggingface.
-        :param merge_data_splits: Whether to merge train, dev, and test splits into one.
-        :param change_bio_encoding: Convert BIO to single-class labels, removing B-, I-, O- prefix.
-        :param remove_empty_sentences: Whether to remove empty sentences.
-        :param dataset_downsample: Fraction to reduce the dataset size.
-        :param task_type: "token classification", "text classification", or "text regression".
-        :param text_column: Column name for texts.
-        :param label_column: Column name for labels.
-        :param label_map: A dictionary which maps label names to integers.
-        :param text_pair_column: Column name for second text (for entailment tasks).
-        """
-        self.pre_tokenizer = pre_tokenizer
-        self.merge_data_splits = merge_data_splits
-        self.change_bio_encoding = change_bio_encoding
-        self.remove_empty_sentences = remove_empty_sentences
-        self.dataset_downsample = dataset_downsample
-        self.task_type = task_type
-        self.text_column = text_column
-        self.label_column = label_column
-        self.label_map = label_map
-        self.text_pair_column = text_pair_column
-        self.dataset_size = 0
+    def __str__(self):
+        return self.value
+
+
+@dataclass
+class DatasetCleaner:
+    dataset_downsample: Optional[float] = None
+    text_column: Optional[str] = None
+    text_pair_column: Optional[str] = None
+    label_column: Optional[str] = None
+    label_map: Optional[dict] = None
+    task_category: Optional[TaskCategory] = None
+    cleanup_rows: bool = True
+    remove_bio_encoding: bool = True
+    tokenize: bool = False
 
     def prepare_dataset(
-        self, dataset: Union[str, DatasetDict, Dataset]
-    ) -> Union[Dataset, DatasetDict]:
-        """Preprocess a dataset, leave only needed columns, down-sample
+        self, dataset: Union[str, Dataset, DatasetDict]
+    ) -> tuple[Union[list[str], list[list[str]]], torch.Tensor, TaskCategory]:
+        """Prepare texts and labels, and assign task category.
 
-        :param dataset: dataset from huggingface. It can be one of the following:
-        a DatasetDict (containing multiple splits) or a single dataset split (e.g., Dataset)
-        :return: Return clean and preprocessed dataset, that can be used in the transformer-ranker
+        Downsample dataset, find text and label columns, create label map,
+        preprocess labels, pre-tokenize, clean rows, merge text pair columns.
+        Returns: (processed texts, label tensor, task category) 
         """
-        # Load huggingface dataset
-        if isinstance(dataset, str):
-            dataset = datasets.load_dataset(dataset, trust_remote_code=True)
-        else:
-            dataset = dataset
 
-        if not isinstance(dataset, (DatasetDict, Dataset)):
-            raise ValueError(
-                "The dataset must be an instance of either DatasetDict (for multiple splits) "
-                "or Dataset (for a single split) to be preprocessed."
-            )
+        # Verify dataset type
+        if not isinstance(dataset, (Dataset, DatasetDict)):
+            raise ValueError(f"Unsupported dataset type: {type(dataset)}")
 
-        # Clone the dataset to avoid changing the original one
-        dataset = dataset.map(lambda x: x, load_from_cache_file=False, desc="Cloning dataset")
+        # Merge dataset splits into one
+        if isinstance(dataset, DatasetDict):
+            dataset = datasets.concatenate_datasets(list(dataset.values()))
 
-        if self.merge_data_splits and isinstance(dataset, DatasetDict):
-            dataset = self._merge_data_splits(dataset)
+        # Find or set the text field
+        text_column = self.text_column if self.text_column \
+            else self._find_column(dataset, "text column")
 
-        # Find text and label columns
-        text_column, label_column, label_type = self._find_text_and_label_columns(
-            dataset, self.text_column, self.label_column
-        )
+        # Find or set the label field
+        label_column = self.label_column if self.label_column \
+            else self._find_column(dataset, "label column")
 
-        # Find task category based on label type
-        if not self.task_type:
-            task_type = self._find_task_type(label_column, label_type)
-        else:
-            task_type = self.task_type
+        # Find or set the task_category
+        task_category = self.task_category if self.task_category \
+            else self._find_task_category(dataset, label_column)
 
-        if self.remove_empty_sentences:
-            dataset = self._remove_empty_rows(dataset, text_column, label_column)
-
-        if self.dataset_downsample:
-            dataset = self._downsample(dataset, ratio=self.dataset_downsample)
-
-        # Pre-tokenize sentences if pre-tokenizer is given
-        if not task_type == "token classification" and self.pre_tokenizer:
-            dataset = self._tokenize(dataset, self.pre_tokenizer, text_column)
-
-        # Concatenate text columns for text-pair tasks
+        # Combine text pair columns with a separator token
         if self.text_pair_column:
-            dataset, text_column = self._merge_textpairs(
-                dataset, text_column, self.text_pair_column
-            )
+            dataset = self._merge_text_pairs(dataset, text_column, self.text_pair_column)
+            text_column = f"{text_column}+{self.text_pair_column}"
 
-        # Convert string labels to integers
-        if isinstance(label_type, str):
-            dataset, self.label_map = self._make_labels_categorical(dataset, label_column)
+        # Remove unused columns
+        dataset = dataset.select_columns([text_column, label_column])
 
-        # Try to find label map in the dataset
-        if not self.label_map:
-            self.label_map = self._create_label_map(dataset, label_column)
+        # Downsample to a given ratio
+        if self.dataset_downsample:
+            dataset = self._downsample(dataset, self.dataset_downsample)
 
-        # Remove BIO prefixes for ner or chunking tasks
-        if task_type == "token classification" and self.change_bio_encoding:
-            dataset, self.label_map = self._change_bio_encoding(
-                dataset, label_column, self.label_map
-            )
+        # Clean noisy or empty rows
+        if self.cleanup_rows:
+            dataset = self._cleanup_rows(dataset, text_column, label_column)
 
-        # Keep only text and label columns
-        keep_columns = {text_column, self.text_pair_column, label_column} - {None}
-        columns_to_remove = list(set(dataset.column_names) - keep_columns)
-        dataset = dataset.remove_columns(columns_to_remove)
+        # Optional pre-tokenization
+        if self.tokenize and isinstance(dataset[text_column][0], str):
+            dataset = self._whitespace_tokenize(dataset, text_column)
 
-        # Set updated attributes and log them
-        self.text_column = text_column
-        self.label_column = label_column
-        self.task_type = task_type
-        self.dataset_size = len(dataset)
-        self.log_dataset_info()
+        # Set or create a label map for classification
+        label_map = self.label_map
+        if task_category in (TaskCategory.TOKEN_CLASSIFICATION, TaskCategory.TEXT_CLASSIFICATION):
+            dataset, label_map = (dataset, label_map) if label_map \
+                else self._create_label_map(dataset, label_column)
 
-        return dataset
+            # Remove BIO encoding for token classification
+            if task_category == TaskCategory.TOKEN_CLASSIFICATION and self.remove_bio_encoding:
+                dataset, label_map = self._remove_bio_encoding(dataset, label_column, label_map)
 
-    def prepare_labels(self, dataset: Dataset) -> torch.Tensor:
-        """Prepare labels as tensors.
-        Flatten labels if they contain lists (for token classification)"""
-        labels = dataset[self.label_column]
-        labels = (
-            [item for sublist in labels for item in sublist]
-            if isinstance(labels[0], list)
-            else labels
+        # Prepare all texts
+        texts = dataset[text_column]
+
+        # Prepare all labels as a tensor
+        labels = dataset[label_column]
+        if task_category == TaskCategory.TOKEN_CLASSIFICATION:
+            labels = [word_label for labels in dataset[label_column] for word_label in labels]
+        labels = torch.tensor(labels)
+
+        # Log dataset info
+        self._log_dataset_info(
+            text_column, label_column, label_map, task_category,
+            self.dataset_downsample, dataset_size=len(dataset)
         )
-        return torch.tensor(labels)
 
-    def prepare_sentences(self, dataset: Dataset) -> list[str]:
-        """Gather sentences in the text column."""
-        return dataset[self.text_column]
+        return texts, labels, task_category
 
     @staticmethod
-    def _downsample(dataset: Dataset, ratio: float) -> Dataset:
-        """Reduce the dataset to a chosen ratio."""
-        dataset = dataset.shuffle(seed=42).select(range(int(len(dataset) * ratio)))
-        return dataset
+    def _find_column(dataset: Dataset, column_role: str) -> str:
+        """Find text and label columns using common keywords."""
+        common_names: dict = {
+            'text column': [
+                "text", "sentence", "token", "tweet", "document", "paragraph", "description",
+                "comment", "utterance", "question", "story", "context", "passage",
+            ],
+            "label column": [
+                "label", "ner_tag", "named_entities", "entities", "tag", "target", "category",
+                "class", "sentiment", "polarity", "emotion", "rating", "stance",
+            ]
+        }
+
+        columns = dataset.column_names
+        found_column = next(
+            (col for keyword in common_names[column_role] for col in columns if keyword in col),
+            None
+        )
+        if found_column is None:
+            raise ValueError(
+                f"{column_role} not found in dataset: {dataset.column_names}. "
+                f"Specify it manually text_column: str = ..."
+            )
+
+        return found_column
 
     @staticmethod
-    def _find_text_and_label_columns(
-        dataset: Dataset, text_column: Optional[str] = None, label_column: Optional[str] = None
-    ) -> tuple[str, str, Type]:
-        """Find text and label columns in hf datasets based on common keywords"""
-        text_columns = [
-            "text", "sentence", "token", "tweet", "document", "paragraph", "description",
-            "comment", "utterance", "question", "story", "context", "passage",
-        ]
-
-        label_columns = [
-            "label", "ner_tag", "named_entities", "entities", "tag", "target", "category",
-            "class", "sentiment", "polarity", "emotion", "rating", "stance",
-        ]
-
-        column_names = dataset.column_names
-        if not text_column:
-            # Iterate over keywords and check if it exists in the dataset
-            text_column = next(
-                (col for keyword in text_columns for col in column_names if keyword in col), None
-            )
-        if not label_column:
-            label_column = next(
-                (col for keyword in label_columns for col in column_names if keyword in col), None
-            )
-
-        if not text_column or not label_column:
-            missing = "text" if not text_column else "label"
-            raise KeyError(
-                f'Can not determine the {missing} column. Specify {missing}_column="..." '
-                f"from available columns: {column_names}."
-            )
-
-        label_type = type(dataset[label_column][0])
-        return text_column, label_column, label_type
-
-    @staticmethod
-    def _merge_textpairs(
-        dataset: Dataset, text_column: str, text_pair_column: str
-    ) -> tuple[Dataset, str]:
-        """Concatenate text pairs into a single text using separator token"""
-        new_text_column_name = text_column + "+" + text_pair_column
-
+    def _merge_text_pairs(dataset: Dataset, text_column: str, text_pair_column: str) -> Dataset:
+        """Concatenate text pairs into single column using sep token"""
         if text_pair_column not in dataset.column_names:
             raise ValueError(
                 f"Text pair column name '{text_pair_column}' can not be found in the dataset. "
                 f"Use one of the following names for tex pair: {dataset.column_names}."
             )
 
-        def merge_texts(dataset_entry: dict[str, str]) -> dict[str, str]:
-            dataset_entry[text_column] = (
-                dataset_entry[text_column] + " [SEP] " + dataset_entry[text_pair_column]
-            )
-            dataset_entry[new_text_column_name] = dataset_entry.pop(text_column)
-            return dataset_entry
+        dataset = dataset.map(
+            lambda dataset_row: {
+                text_column: dataset_row[text_column] + " [SEP] " + dataset_row[text_pair_column]
+            },
+            desc="Merging text pair columns",
+        )
 
-        dataset = dataset.map(merge_texts, num_proc=None, desc="Merging text pair columns")
-        return dataset, new_text_column_name
+        new_text_column_name = text_column + "+" + text_pair_column
+        dataset = dataset.rename_column(text_column, new_text_column_name)
+        return dataset
 
     @staticmethod
-    def _find_task_type(label_column: str, label_type: type) -> str:
-        """Determine the task type based on the label column's data type."""
-        label_type_to_task_type = {
-            int: "text classification",  # text classification labels can be integers
-            str: "text classification",  # or strings e.g. "positive"
-            list: "token classification",  # token-level tasks have a list of labels
-            float: "text regression",  # regression tasks have continuous values
+    def _find_task_category(dataset: Dataset, label_column: str) -> TaskCategory:
+        """Assign task category based on label type."""
+        label_to_task_category = {
+            int: TaskCategory.TEXT_CLASSIFICATION,
+            str: TaskCategory.TEXT_CLASSIFICATION,
+            list: TaskCategory.TOKEN_CLASSIFICATION,
+            float: TaskCategory.TEXT_REGRESSION,
         }
 
-        for key, task_type in label_type_to_task_type.items():
-            if issubclass(label_type, key):
-                return task_type
+        label_types = list(set(type(label) for label in dataset[label_column]))
+
+        if len(label_types) != 1:
+            raise ValueError(
+                f"The dataset has inconsistent types in the label column: {label_types}. "
+                f"All labels should have the same type."
+            )
+
+        for key, task_category in label_to_task_category.items():
+            if issubclass(label_types[0], key):
+                return task_category
 
         raise ValueError(
-            f"Cannot determine the task type for the label column '{label_column}'. "
-            f"Label types are {list(label_type_to_task_type.keys())}, but got {label_type}."
+            f"Cannot determine task category for the label column '{label_column}'. "
+            f"Supported label types for are {list(label_to_task_category.keys())}."
         )
 
     @staticmethod
-    def _tokenize(dataset: Dataset, pre_tokenizer: Whitespace, text_column: str) -> Dataset:
-        """Tokenize a dataset using hf pre-tokenizer (e.g. Whitespace)"""
+    def _downsample(dataset: Dataset, ratio: float) -> Dataset:
+        """Reduce dataset size to given ratio."""
+        return dataset.shuffle(seed=42).select(range(int(len(dataset) * ratio)))
+
+    @staticmethod
+    def _cleanup_rows(
+            dataset: Dataset, text_column: str, label_column: str
+    ) -> Dataset:
+        """Filter out entries with empty or noisy texts and labels."""
+        def is_valid_entry(dataset_row) -> bool:
+            text, label = dataset_row[text_column], dataset_row[label_column]
+
+            if not text or label is None:
+                return False
+
+            if not isinstance(text, list):
+                text = [text]
+
+            bad_characters = ["\uFE0F"]  # emoji variation symbol '\uFE0F'
+            if any(char in t for t in text for char in bad_characters):
+                return False
+
+            if not isinstance(label, list):
+                label = [label]
+
+            # Remove "-1" labels sometimes used for unlabeled text
+            if any(word_label == -1 for word_label in label):
+                return False
+
+            return True
+
+        dataset = dataset.filter(is_valid_entry, desc="Removing empty rows")
+        return dataset
+
+    @staticmethod
+    def _map_string_labels_to_integers(dataset, label_column) -> tuple[Dataset, dict[str, int]]:
+        """Convert string labels to integers and retain label map."""
+        label_names = sorted(set(dataset[label_column]))
+        label_map = {label_name: idx for idx, label_name in enumerate(label_names)}
+
+        def label_to_id(label):
+            if isinstance(label, list):
+                return [label_map[word_label] for word_label in label]
+            return label_map[label]
+
+        dataset = dataset.map(
+            lambda dataset_row: {label_column: label_to_id(dataset_row[label_column])},
+            desc="Converting string labels to integers"
+        )
+
+        return dataset, label_map
+
+    @staticmethod
+    def _create_label_map(dataset: Dataset, label_column: str) -> tuple[Dataset, dict[str, int]]:
+        """Find feature names to create label map, convert labels to integers if needed."""
+        label_names = getattr(
+            getattr(dataset.features[label_column], "feature", None), "names", None
+        ) or getattr(dataset.features[label_column], "names", None)
+
+        if not label_names:
+            label_names = sorted(set(
+                    label for sublist in dataset[label_column]
+                    for label in (sublist if isinstance(sublist, list) else [sublist])
+            ))
+            label_names = [str(label) for label in label_names]
+
+        label_map = {label: idx for idx, label in enumerate(label_names)}
+
+        if type(dataset[label_column][0]) in (str, list[str]):
+            dataset = dataset.map(
+                lambda dataset_row: {
+                    label_column: (
+                        label_map[dataset_row[label_column]]
+                        if isinstance(dataset_row[label_column], str)
+                        else [label_map[word_label] for word_label in label_column]
+                    )
+                },
+                desc="Converting string labels to integers"
+            )
+        return dataset, label_map
+
+    @staticmethod
+    def _remove_bio_encoding(
+        dataset: Dataset, label_column: str, label_map: dict[str, int]
+    ) -> tuple[Dataset, dict[str, int]]:
+        """Remove BIO prefixes for ner labels and create new label map."""
+        labels = [label.split("-")[-1] for label in label_map.keys()]
+        unique_labels = list(dict.fromkeys(labels))
+        new_label_map = {label: idx for idx, label in enumerate(unique_labels)}
+
+        if label_map == new_label_map:
+            logger.warning(
+                "Could not remove BIO encoding. Pass your own label map "
+                "when initializing the ranker label_map: dict[str, int] = ..."
+            )
+
+        new_idx = {
+            old_idx: new_label_map[label.split("-")[-1]] for label, old_idx in label_map.items()
+        }
+
+        dataset = dataset.map(
+            lambda dataset_entry: {
+                label_column: [new_idx[old_idx] for old_idx in dataset_entry[label_column]]
+            },
+            desc="Removing BIO encoding",
+        )
+
+        return dataset, new_label_map
+
+    @staticmethod
+    def _whitespace_tokenize(dataset: Dataset, text_column: str) -> Dataset:
+        """Tokenize using Whitespace"""
+        tokenizer = Whitespace()
 
         def pre_tokenize(example):
-            encoding = pre_tokenizer.pre_tokenize_str(example[text_column])
+            encoding = tokenizer.pre_tokenize_str(example[text_column])
             example[text_column] = [token for token, _ in encoding]
             return example
 
@@ -246,99 +310,22 @@ class DatasetCleaner:
         return dataset
 
     @staticmethod
-    def _merge_data_splits(dataset: DatasetDict) -> Dataset:
-        """Merge DatasetDict into a single dataset."""
-        return datasets.concatenate_datasets(list(dataset.values()))
-
-    @staticmethod
-    def _remove_empty_rows(dataset: Dataset, text_column: str, label_column: str) -> Dataset:
-        """Filter out entries with empty or noisy text or labels."""
-
-        def is_valid_entry(sample) -> bool:
-            text, label = sample[text_column], sample[label_column]
-
-            # Check if text is non-empty and does not contain emoji variation character '\uFE0F'
-            has_text = bool(text) and (not isinstance(text, list) or "\uFE0F" not in text)
-
-            # Check for empty and negative labels
-            valid_label = label is not None and (
-                all(word_label >= 0 for word_label in label) if isinstance(label, list)
-                else label >= 0
-            )
-
-            return has_text and valid_label
-
-        return dataset.filter(is_valid_entry, desc="Removing empty rows")
-
-    @staticmethod
-    def _make_labels_categorical(
-        dataset: Dataset, label_column: str
-    ) -> tuple[Dataset, dict[str, int]]:
-        """Convert string labels to integers"""
-        unique_labels = sorted(set(dataset[label_column]))
-        label_map = {label: idx for idx, label in enumerate(unique_labels)}
-
-        def map_labels(dataset_entry):
-            dataset_entry[label_column] = label_map[dataset_entry[label_column]]
-            return dataset_entry
-
-        dataset = dataset.map(map_labels, num_proc=None, desc="Mapping string labels to integers")
-        return dataset, label_map
-
-    @staticmethod
-    def _create_label_map(dataset: Dataset, label_column: str) -> dict[str, int]:
-        """Try to find feature names in a hf dataset."""
-        label_names = getattr(
-            getattr(dataset.features[label_column], "feature", None), "names", None
-        ) or getattr(dataset.features[label_column], "names", None)
-
-        # If label names are missing, create them manually
-        if not label_names:
-            label_names = sorted(
-                {
-                    str(label)
-                    for sublist in dataset[label_column]
-                    for label in (sublist if isinstance(sublist, list) else [sublist])
-                }
-            )
-
-        return {label: idx for idx, label in enumerate(label_names)}
-
-    @staticmethod
-    def _change_bio_encoding(
-        dataset: Dataset, label_column: str, label_map: dict[str, int]
-    ) -> tuple[Dataset, dict[str, int]]:
-        """Remove BIO prefixes from NER labels, update the dataset, and create a new label map."""
-
-        # Get unique labels without BIO prefixes and create new label map
-        unique_labels = set(label.split("-")[-1] for label in label_map)
-        new_label_map = {label: idx for idx, label in enumerate(unique_labels)}
-
-        # Map old ids to new ids
-        reverse_map = {
-            old_idx: new_label_map[label.split("-")[-1]] for label, old_idx in label_map.items()
-        }
-        dataset = dataset.map(
-            lambda sample: {
-                label_column: [reverse_map[old_idx] for old_idx in sample[label_column]]
-            },
-            desc="Removing BIO prefixes",
+    def _log_dataset_info(
+            text_column, label_column, label_map, task_category, downsample_ratio, dataset_size
+    ) -> None:
+        """Log information about preprocessed dataset"""
+        # Some details about dataset
+        logger.info(
+            f"Dataset Info - Text Column: {text_column}, Label Column: {label_column}, "
+            f"Task Category: {task_category}, Dataset Size: {dataset_size} texts"
         )
 
-        # Check if label map was changed
-        if label_map == new_label_map:
-            logger.warning(
-                "Could not remove BIO prefixes for this tagging dataset. "
-                "Please add the label map as parameter label_map: dict[str, int] = ... manually."
+        # Show dataset size
+        if downsample_ratio and downsample_ratio < 1.0:
+            logger.info(
+                f"Dataset has been downsampled to {int(downsample_ratio * 100)}% of original size."
             )
 
-        return dataset, new_label_map
-
-    def log_dataset_info(self) -> None:
-        """Log information about dataset"""
-        logger.info(f"Texts and labels: {self.text_column}, {self.label_column}")
-        logger.info(f"Label map: {self.label_map}")
-        is_downsampled = self.dataset_downsample and self.dataset_downsample < 1.0
-        downsample_info = f"(down-sampled to {self.dataset_downsample})" if is_downsampled else ""
-        logger.info(f"Dataset size: {self.dataset_size} texts {downsample_info}")
-        logger.info(f"Task category: {self.task_type}")
+        # And the label map
+        if task_category != TaskCategory.TEXT_REGRESSION:
+            logger.info(f"Label Map: {label_map}")
