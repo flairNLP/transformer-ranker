@@ -72,6 +72,8 @@ class TransformerRanker:
         """
         self._confirm_ranker_setup(estimator=estimator, layer_aggregator=layer_aggregator)
 
+        device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+
         # Load all transformers into hf cache
         self._preload_transformers(models, device)
 
