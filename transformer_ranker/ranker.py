@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from .datacleaner import DatasetCleaner, TaskCategory
 from .embedder import Embedder
-from .estimators import KNN, HScore, LogME
+from .estimators import LogME, HScore, NearestNeighbors
 from .utils import Result, configure_logger
 
 logger = configure_logger("transformer_ranker", logging.INFO)
@@ -23,15 +23,13 @@ class TransformerRanker:
         **kwargs: Any
     ):
         """
-        Rank language models for different NLP tasks. Embed a part of the dataset and
-        estimate embedding suitability with transferability metrics like hscore or logme.
-        Embeddings can be averaged across all layers or selected from the best-performing layer.
+        Prepare dataset and transferability metrics.
 
-        :param dataset: a dataset from huggingface, containing texts and label columns.
+        :param dataset: a dataset from huggingface with texts and labels.
         :param dataset_downsample: a fraction to which the dataset should be reduced.
-        :param kwargs: Additional dataset-specific parameters for data cleaning.
+        :param kwargs: additional dataset-specific parameters for data cleaning.
         """
-        # Clean the original dataset and keep only needed columns
+        # Prepare dataset, downsample it
         datacleaner = DatasetCleaner(
             dataset_downsample=dataset_downsample,
             text_column=text_column,
@@ -45,6 +43,13 @@ class TransformerRanker:
 
         self.texts, self.labels, self.task_category = datacleaner.prepare_dataset(dataset)
 
+        # Supported metrics
+        self.transferability_metrics = {
+            'logme': LogME,
+            'hscore': HScore,
+            'knn': NearestNeighbors,
+        }
+
     def run(
         self,
         models: list[Union[str, torch.nn.Module]],
@@ -57,9 +62,10 @@ class TransformerRanker:
         **kwargs: Any
     ):
         """
-        Load models, get embeddings, score, and rank results.
+        Load models, iterate through each to gather embeddings and score them.
+        Embeddings can be averaged across all layers or selected from the best scoring layer.
 
-        :param models: A list of model names string identifiers
+        :param models: A list of model names
         :param batch_size: The number of samples to process in each batch, defaults to 32.
         :param estimator: Transferability metric (e.g., 'hscore', 'logme', 'knn').
         :param layer_aggregator: Which layer to select (e.g., 'layermean', 'bestlayer').
@@ -81,22 +87,25 @@ class TransformerRanker:
         if gpu_estimation:
             self.labels = self.labels.to(device)
 
+        # Set transferability metric
+        regression = self.task_category == TaskCategory.TEXT_REGRESSION
+        metric = self.transferability_metrics[estimator](regression=regression)
+
         # Store all results in a dictionary
         ranking_results = Result(metric=estimator)
 
-        # Iterate over each transformer model and score it
+        # Iterate over each model and score it
         for model in models:
 
-            # Select transformer layers: last layer or all layers
+            # Select model layers: last layer or all layers
             layer_ids = "-1" if layer_aggregator == "lastlayer" else "all"
             layer_pooling = "mean" if "mean" in layer_aggregator else None
 
-            # Set effective sentence pooling as parameter
             effective_sentence_pooling = (
                 None if self.task_category == TaskCategory.TOKEN_CLASSIFICATION else sentence_pooling
             )
 
-            # Prepare the transformer embedder with word, sentence, and layer pooling
+            # Prepare embedder with word, sentence, and layer pooling
             embedder = Embedder(
                 model=model,
                 layer_ids=layer_ids,
@@ -106,7 +115,7 @@ class TransformerRanker:
                 **kwargs,
             )
 
-            # Gather models embeddings for the dataset
+            # Gather embeddings
             embeddings = embedder.embed(
                 self.texts,
                 batch_size=batch_size,
@@ -114,7 +123,7 @@ class TransformerRanker:
                 move_embeddings_to_cpu=not gpu_estimation,
             )
 
-            # Transferability for word tasks: all word embeddings in one list
+            # Prepare all embeddings in one list 
             if self.task_category == TaskCategory.TOKEN_CLASSIFICATION:
                 embeddings = [word for sentence in embeddings for word in sentence]
 
@@ -122,7 +131,7 @@ class TransformerRanker:
             embedded_layer_ids = embedder.layer_ids
             num_layers = embeddings[0].size(0)
 
-            # Remove transformer model from memory after embeddings are extracted
+            # Remove model from memory
             del embedder
             torch.cuda.empty_cache()
 
@@ -132,7 +141,7 @@ class TransformerRanker:
             for layer_id in tqdm(
                 range(num_layers), desc="Transferability Score", bar_format=tqdm_bar_format
             ):
-                # Get the position of the layer index
+                # Get the position of layer index
                 layer_index = embedded_layer_ids[layer_id]
 
                 # Stack embeddings for that layer
@@ -140,13 +149,9 @@ class TransformerRanker:
                     [word_embedding[layer_index] for word_embedding in embeddings]
                 )
 
-                # Estimate score using layer embeddings and labels
-                score = self._estimate_score(
-                    estimator=estimator,
-                    embeddings=layer_embeddings,
-                    labels=self.labels,
-                )
-                layer_scores.append(score)
+                # Estimate transferability
+                score = metric.fit(embeddings=layer_embeddings, labels=self.labels)
+                layer_scores.append(round(score, 4))
 
             # Store scores for each layer in the result dictionary
             ranking_results.layerwise_scores[model_name] = dict(
@@ -159,8 +164,6 @@ class TransformerRanker:
 
             # Log the final score along with scores for each layer
             result_log = f"{model_name} estimation: {final_score} ({ranking_results.metric})"
-
-            # Log scores for layer ranking
             if layer_aggregator == "bestlayer":
                 result_log += f", scores for each layer: {ranking_results.layerwise_scores[model_name]}"
 
@@ -172,7 +175,7 @@ class TransformerRanker:
     def _preload_transformers(
         models: list[Union[str, torch.nn.Module]], device: Optional[str] = None
     ) -> None:
-        """Loads all models into HuggingFace cache"""
+        """Load models to HuggingFace cache"""
         cached_models, download_models = [], []
         for model_name in models:
             try:
@@ -188,47 +191,17 @@ class TransformerRanker:
             Embedder(model_name, device=device)
 
     def _confirm_ranker_setup(self, estimator, layer_aggregator) -> None:
-        """Validate estimator and layer selection setup"""
-        valid_estimators = ["hscore", "logme", "knn"]
+        """Validate estimator and layer pooling"""
+        valid_estimators = self.transferability_metrics.keys()
         if estimator not in valid_estimators:
             raise ValueError(
                 f"Unsupported estimation method: {estimator}. "
                 f"Use one of the following {valid_estimators}"
             )
 
-        valid_layer_aggregators = ["layermean", "lastlayer", "bestlayer"]
-        if layer_aggregator not in valid_layer_aggregators:
+        valid_layer_pooling = ["layermean", "lastlayer", "bestlayer"]
+        if layer_aggregator not in valid_layer_pooling:
             raise ValueError(
                 f"Unsupported layer pooling: {layer_aggregator}. "
                 f"Use one of the following {valid_layer_aggregators}"
             )
-
-        valid_task_categories = ["text classification", "token classification", "text regression"]
-        if self.task_category not in valid_task_categories:
-            raise ValueError(
-                "Unable to determine task type of the dataset. Please specify it as a parameter: "
-                'task_category= "text classification", "token classification", or '
-                '"text regression"'
-            )
-
-        if self.task_category == TaskCategory.TEXT_REGRESSION and estimator == "hscore":
-            supported_estimators = [est for est in valid_estimators if est != "hscore"]
-            raise ValueError(
-                f'"{estimator}" does not support text regression. '
-                f"Use one of the following estimators: {supported_estimators}"
-            )
-
-    def _estimate_score(self, estimator, embeddings: torch.Tensor, labels: torch.Tensor) -> float:
-        """Use an estimator to score a transformer"""
-        regression = self.task_category == TaskCategory.TEXT_REGRESSION
-
-        estimator_classes = {
-            "knn": KNN(k=3, regression=regression),
-            "logme": LogME(regression=regression),
-            "hscore": HScore(),
-        }
-
-        estimator = estimator_classes[estimator]
-        score = estimator.fit(embeddings=embeddings, labels=labels)
-
-        return round(score, 4)

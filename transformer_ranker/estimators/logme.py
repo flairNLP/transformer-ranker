@@ -1,17 +1,15 @@
-from typing import Optional
 import torch
 
+from .base import Estimator
 
-class LogME:
+
+class LogME(Estimator):
     def __init__(self, regression: bool = False):
         """
         LogME (Log of Maximum Evidence) estimator.
         Paper: https://arxiv.org/abs/2102.11005
-
-        :param regression: Boolean flag if the task is regression.
         """
-        self.regression = regression
-        self.score: Optional[float] = None
+        super().__init__(regression=regression)
 
     def fit(
         self,
@@ -27,8 +25,8 @@ class LogME:
         the prior (alpha) and likelihood (beta), projecting the target labels onto the singular
         vectors of the feature matrix.
 
-        :param embeddings: Embedding matrix of shape (num_samples, hidden_dim)
-        :param labels: Label vector of shape (num_samples,)
+        :param embeddings: Embedding tensor (num_samples, hidden_dim)
+        :param labels: Label tensor (num_samples,)
         :param initial_alpha: Initial precision of the prior (controls the regularization strength)
         :param initial_beta: Initial precision of the likelihood (controls the noise in the data)
         :param tol: Tolerance for the optimization convergence
@@ -44,7 +42,7 @@ class LogME:
 
         # Get the number of samples, number of classes, and the hidden size
         num_samples, hidden_size = embeddings.shape
-        class_names, counts = torch.unique(labels, return_counts=True)
+        class_names, _ = torch.unique(labels, return_counts=True)
         num_classes = labels.shape[1] if self.regression else len(class_names)
 
         # SVD on the features

@@ -1,23 +1,30 @@
+import warnings
+
 import torch
 
+from .base import Estimator
 
-class HScore:
-    def __init__(self):
+
+class HScore(Estimator):
+    def __init__(self, regression: bool = False):
         """
         Regularized H-Score estimator.
-        Original H-score paper: https://arxiv.org/abs/2212.10082
+        Paper: https://arxiv.org/abs/2212.10082
         Shrinkage-based (regularized) H-Score: https://openreview.net/pdf?id=iz_Wwmfquno
         """
-        self.score = None
+        if regression:
+            warnings.warn("HScore is not suitable for regression tasks.", UserWarning)
+
+        super().__init__(regression=regression)
 
     def fit(self, embeddings: torch.Tensor, labels: torch.Tensor) -> float:
         """
-        H-score intuition: Higher variance between embeddings of different classes
+        H-score intuition: higher variance between embeddings of different classes
         (mean vectors for each class) and lower feature redundancy (i.e. inverse of the covariance
         matrix for all data points) lead to better transferability.
 
-        :param embeddings: Embedding matrix of shape (num_samples, hidden_size)
-        :param labels: Label vector of shape (num_samples,)
+        :param embeddings: Embedding tensor (num_samples, hidden_size)
+        :param labels: Label tensor (num_samples,)
         :return: H-score, where higher is better.
         """
         # Center all embeddings
@@ -26,7 +33,7 @@ class HScore:
 
         # Number of samples, hidden size (i.e. embedding length), number of classes
         num_samples, hidden_size = embeddings.size()
-        classes, class_counts = torch.unique(labels, return_counts=True)
+        classes, _ = torch.unique(labels, return_counts=True)
         num_classes = len(classes)
 
         # Feature covariance matrix (hidden_size x hidden_size)

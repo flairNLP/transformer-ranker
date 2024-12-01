@@ -3,7 +3,7 @@ from typing import Tuple
 import pytest
 import torch
 
-from transformer_ranker.estimators import KNN
+from transformer_ranker.estimators import NearestNeighbors
 
 
 def sample_data(
@@ -40,7 +40,7 @@ def sample_data(
 @pytest.mark.parametrize("k,dim", [(6, 1024), (10, 100), (100, 256), (1024, 16)])
 def test_knn_on_constructed_data(k, dim):
     features, labels, expected_accuracy = sample_data(k=k, dim=dim)
-    estimator = KNN(k)
+    estimator = NearestNeighbors(k=k)
 
     accuracy = estimator.fit(features, labels)
 
@@ -57,6 +57,6 @@ def test_knn_on_constructed_data(k, dim):
     ],
 )
 def test_knn_on_iris(iris_dataset, k, expected_accuracy):
-    e = KNN(k)
+    e = NearestNeighbors(k=k)
     score = e.fit(iris_dataset["data"], iris_dataset["target"])
     assert score == pytest.approx(expected_accuracy)

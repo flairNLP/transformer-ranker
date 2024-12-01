@@ -1,13 +1,18 @@
-from typing import Union, Optional
+
+from typing import Optional, Union
+
 import torch
 from torchmetrics.classification import BinaryF1Score, MulticlassF1Score
+from torch.nn.functional import cosine_similarity
+
+from .base import Estimator
 
 
-class KNN:
+class NearestNeighbors(Estimator):
     def __init__(
         self,
-        k: int = 3,
         regression: bool = False,
+        k: int = 3,
     ):
         """
         K-Nearest Neighbors estimator.
@@ -15,29 +20,42 @@ class KNN:
         :param k: Number of nearest neighbors to consider.
         :param regression: Boolean flag if the task is regression.
         """
-        self.k = k
-        self.regression = regression
-        self.score: Optional[float] = None
+        super().__init__(regression=regression)
 
-    def fit(self, embeddings: torch.Tensor, labels: torch.Tensor, batch_size: int = 1024) -> float:
+        self.k = k  # number of neighbors
+        self.distance_metrics = {
+            'euclidean': lambda x, y: torch.cdist(x, y, p=2),
+            'cosine': lambda x, y: 1 - cosine_similarity(x[:, None, :], y[None, :, :], dim=-1)
+        }
+
+    def fit(
+        self,
+        embeddings: torch.Tensor,
+        labels: torch.Tensor,
+        batch_size: int = 1024,
+        distance_metric: str = 'euclidean',
+    ) -> float:
         """
-        Estimate embedding suitability for classification or regression using nearest neighbors
+        Evaluate embeddings using kNN. Distance and topk computations are done in batches.
 
-        :param embeddings: Embedding matrix of shape (n_samples, hidden_size)
-        :param labels: Label vector of shape (n_samples,)
+        :param embeddings: Embedding tensor (n_samples, hidden_size)
+        :param labels: Label tensor (n_samples,)
         :param batch_size: Batch size for distance and top-k computation in chunks
-        :return: Score (F1 score for classification or Pearson correlation for regression)
+        :param distance_metric: Metric to use for distance computation 'euclidean', 'cosine'
+        :return: F1-micro score (for classification) or Pearson correlation (for regression)
         """
         num_samples = embeddings.size(0)
         num_classes = len(torch.unique(labels))
         knn_indices = torch.zeros((num_samples, self.k), dtype=torch.long, device=embeddings.device)
 
+        distance_func = self.distance_metrics.get(distance_metric)
+
         for start in range(0, num_samples, batch_size):
             end = min(start + batch_size, num_samples)
             batch_features = embeddings[start:end]
 
-            # Euclidean distances between the batch and all other features
-            dists = torch.cdist(batch_features, embeddings, p=2)
+            # Distances between the batch and all other features
+            dists = distance_func(batch_features, embeddings)
 
             # Exclude self-distances by setting diagonal to a large number
             diag_indices = torch.arange(start, end, device=embeddings.device)
