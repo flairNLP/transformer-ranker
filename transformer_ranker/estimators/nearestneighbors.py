@@ -1,19 +1,14 @@
-
-from typing import Optional, Union
+from typing import Union
 
 import torch
-from torchmetrics.classification import BinaryF1Score, MulticlassF1Score
 from torch.nn.functional import cosine_similarity
+from torchmetrics.classification import BinaryF1Score, MulticlassF1Score
 
 from .base import Estimator
 
 
 class NearestNeighbors(Estimator):
-    def __init__(
-        self,
-        regression: bool = False,
-        k: int = 3,
-    ):
+    def __init__(self, regression: bool = False, k: int = 3):
         """
         K-Nearest Neighbors estimator.
 
@@ -24,8 +19,8 @@ class NearestNeighbors(Estimator):
 
         self.k = k  # number of neighbors
         self.distance_metrics = {
-            'euclidean': lambda x, y: torch.cdist(x, y, p=2),
-            'cosine': lambda x, y: 1 - cosine_similarity(x[:, None, :], y[None, :, :], dim=-1)
+            "euclidean": lambda x, y: torch.cdist(x, y, p=2),
+            "cosine": lambda x, y: 1 - cosine_similarity(x[:, None, :], y[None, :, :], dim=-1),
         }
 
     def fit(
@@ -33,7 +28,8 @@ class NearestNeighbors(Estimator):
         embeddings: torch.Tensor,
         labels: torch.Tensor,
         batch_size: int = 1024,
-        distance_metric: str = 'euclidean',
+        distance_metric: str = "euclidean",
+        **kwargs,
     ) -> float:
         """
         Evaluate embeddings using kNN. Distance and topk computations are done in batches.
@@ -48,21 +44,21 @@ class NearestNeighbors(Estimator):
         num_classes = len(torch.unique(labels))
         knn_indices = torch.zeros((num_samples, self.k), dtype=torch.long, device=embeddings.device)
 
-        distance_func = self.distance_metrics.get(distance_metric)
+        distance = self.distance_metrics.get(distance_metric, self.distance_metrics["euclidean"])
 
         for start in range(0, num_samples, batch_size):
             end = min(start + batch_size, num_samples)
             batch_features = embeddings[start:end]
 
             # Distances between the batch and all other features
-            dists = distance_func(batch_features, embeddings)
+            distances = distance(batch_features, embeddings)
 
             # Exclude self-distances by setting diagonal to a large number
             diag_indices = torch.arange(start, end, device=embeddings.device)
-            dists[diag_indices - start, diag_indices] = float("inf")
+            distances[diag_indices - start, diag_indices] = float("inf")
 
             # Indices of the k nearest neighbors for the batch
-            batch_knn_indices = dists.topk(self.k, largest=False).indices
+            batch_knn_indices = distances.topk(self.k, largest=False).indices
             knn_indices[start:end] = batch_knn_indices
 
         knn_labels = labels[knn_indices]
