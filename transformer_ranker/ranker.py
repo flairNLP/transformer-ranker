@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from .datacleaner import DatasetCleaner, TaskCategory
 from .embedder import Embedder
-from .estimators import LogME, HScore, NearestNeighbors
+from .estimators import HScore, LogME, NearestNeighbors
 from .utils import Result, configure_logger
 
 logger = configure_logger("transformer_ranker", logging.INFO)
@@ -20,7 +20,7 @@ class TransformerRanker:
         dataset_downsample: Optional[float] = None,
         text_column: Optional[str] = None,
         label_column: Optional[str] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         """
         Prepare dataset and transferability metrics.
@@ -44,11 +44,7 @@ class TransformerRanker:
         self.texts, self.labels, self.task_category = datacleaner.prepare_dataset(dataset)
 
         # Supported metrics
-        self.transferability_metrics = {
-            'logme': LogME,
-            'hscore': HScore,
-            'knn': NearestNeighbors,
-        }
+        self.transferability_metrics = {"logme": LogME, "hscore": HScore, "knn": NearestNeighbors}
 
     def run(
         self,
@@ -59,7 +55,7 @@ class TransformerRanker:
         sentence_pooling: str = "mean",
         device: Optional[str] = None,
         gpu_estimation: bool = True,
-        **kwargs: Any
+        **kwargs: Any,
     ):
         """
         Load models, iterate through each to gather embeddings and score them.
@@ -78,10 +74,10 @@ class TransformerRanker:
         """
         self._confirm_ranker_setup(estimator=estimator, layer_aggregator=layer_aggregator)
 
-        device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        device = device or "cuda" if torch.cuda.is_available() else "cpu"
 
         # Load all transformers into hf cache
-        self._preload_transformers(models, device)
+        self._preload_transformers(models=models, device=device)
 
         # Device for transferability estimation
         if gpu_estimation:
@@ -96,7 +92,6 @@ class TransformerRanker:
 
         # Iterate over each model and score it
         for model in models:
-
             # Select model layers: last layer or all layers
             layer_ids = "-1" if layer_aggregator == "lastlayer" else "all"
             layer_pooling = "mean" if "mean" in layer_aggregator else None
@@ -117,13 +112,10 @@ class TransformerRanker:
 
             # Gather embeddings
             embeddings = embedder.embed(
-                self.texts,
-                batch_size=batch_size,
-                show_loading_bar=True,
-                move_embeddings_to_cpu=not gpu_estimation,
+                self.texts, batch_size=batch_size, show_loading_bar=True, move_embeddings_to_cpu=not gpu_estimation
             )
 
-            # Prepare all embeddings in one list 
+            # Prepare all embeddings in one list
             if self.task_category == TaskCategory.TOKEN_CLASSIFICATION:
                 embeddings = [word for sentence in embeddings for word in sentence]
 
@@ -138,25 +130,19 @@ class TransformerRanker:
             # Estimate scores for each layer
             layer_scores = []
             tqdm_bar_format = "{l_bar}{bar:10}{r_bar}{bar:-10b}"
-            for layer_id in tqdm(
-                range(num_layers), desc="Transferability Score", bar_format=tqdm_bar_format
-            ):
+            for layer_id in tqdm(range(num_layers), desc="Transferability Score", bar_format=tqdm_bar_format):
                 # Get the position of layer index
                 layer_index = embedded_layer_ids[layer_id]
 
                 # Stack embeddings for that layer
-                layer_embeddings = torch.stack(
-                    [word_embedding[layer_index] for word_embedding in embeddings]
-                )
+                layer_embeddings = torch.stack([word_embedding[layer_index] for word_embedding in embeddings])
 
                 # Estimate transferability
                 score = metric.fit(embeddings=layer_embeddings, labels=self.labels)
                 layer_scores.append(round(score, 4))
 
             # Store scores for each layer in the result dictionary
-            ranking_results.layerwise_scores[model_name] = dict(
-                zip(embedded_layer_ids, layer_scores)
-            )
+            ranking_results.layerwise_scores[model_name] = dict(zip(embedded_layer_ids, layer_scores))
 
             # Aggregate layer scores
             final_score = max(layer_scores) if layer_aggregator == "bestlayer" else layer_scores[0]
@@ -172,9 +158,7 @@ class TransformerRanker:
         return ranking_results
 
     @staticmethod
-    def _preload_transformers(
-        models: list[Union[str, torch.nn.Module]], device: Optional[str] = None
-    ) -> None:
+    def _preload_transformers(models: list[Union[str, torch.nn.Module]], device: Optional[str] = None) -> None:
         """Load models to HuggingFace cache"""
         cached_models, download_models = [], []
         for model_name in models:
@@ -194,14 +178,10 @@ class TransformerRanker:
         """Validate estimator and layer pooling"""
         valid_estimators = self.transferability_metrics.keys()
         if estimator not in valid_estimators:
-            raise ValueError(
-                f"Unsupported estimation method: {estimator}. "
-                f"Use one of the following {valid_estimators}"
-            )
+            raise ValueError(f"Unsupported estimation method: {estimator}. Use one of the following {valid_estimators}")
 
         valid_layer_pooling = ["layermean", "lastlayer", "bestlayer"]
         if layer_aggregator not in valid_layer_pooling:
             raise ValueError(
-                f"Unsupported layer pooling: {layer_aggregator}. "
-                f"Use one of the following {valid_layer_aggregators}"
+                f"Unsupported layer pooling: {layer_aggregator}. Use one of the following {valid_layer_pooling}"
             )
