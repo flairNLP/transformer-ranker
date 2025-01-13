@@ -8,7 +8,7 @@ def read_requirements():
 
 setup(
     name='transformer-ranker',
-    version='0.1.1',
+    version='0.1.2',
     packages=find_packages(),
     description='Efficiently find the best-suited language model (LM) for your NLP task',
     long_description=open('README.md').read(),
