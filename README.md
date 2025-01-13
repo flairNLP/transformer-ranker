@@ -3,8 +3,9 @@ Developed at <a href="https://www.informatik.hu-berlin.de/en/forschung-en/gebiet
 </p>
 <p align="center">
 <a href="https://pypi.org/project/transformer-ranker/"><img alt="PyPi version" src="https://badge.fury.io/py/transformer-ranker.svg"></a>
-<img alt="python" src="https://img.shields.io/badge/python-3.8-blue">
+<img alt="python" src="https://img.shields.io/badge/python-3.9-blue">
 <img alt="Static Badge" src="https://img.shields.io/badge/license-MIT-green">
+<a href="https://huggingface.co/spaces/lukasgarbas/transformer-ranker"><img alt="Demo Spaces" src="https://img.shields.io/badge/Demo-Spaces-brightgreen"></a>
 </p>
 <div align="center">
 <hr>
@@ -177,7 +178,7 @@ Please email your questions or comments to [**Lukas Garbas**](mailto:lukasgarba@
 ## Contributing
 
 Thanks for your interest in contributing! There are many ways to get involved;
-check these [open issues](https://github.com/flairNLP/fundus/issues) for specific tasks.
+check these [open issues](https://github.com/flairNLP/transformer-ranker/issues) for specific tasks.
 
 ## License
 
