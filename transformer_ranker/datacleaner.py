@@ -15,6 +15,7 @@ logger = configure_logger("transformer_ranker", logging.INFO)
 
 class TaskCategory(str, Enum):
     """Supported task categories"""
+
     TOKEN_CLASSIFICATION = "token classification"
     TEXT_CLASSIFICATION = "text classification"
     TEXT_REGRESSION = "text regression"
@@ -42,7 +43,7 @@ class DatasetCleaner:
 
         Downsample dataset, find text and label columns, create label map,
         preprocess labels, pre-tokenize, clean rows, merge text pair columns.
-        Returns: (processed texts, label tensor, task category) 
+        Returns: (processed texts, label tensor, task category)
         """
 
         # Verify dataset type
@@ -54,16 +55,13 @@ class DatasetCleaner:
             dataset = datasets.concatenate_datasets(list(dataset.values()))
 
         # Find or set the text field
-        text_column = self.text_column if self.text_column \
-            else self._find_column(dataset, "text column")
+        text_column = self.text_column if self.text_column else self._find_column(dataset, "text column")
 
         # Find or set the label field
-        label_column = self.label_column if self.label_column \
-            else self._find_column(dataset, "label column")
+        label_column = self.label_column if self.label_column else self._find_column(dataset, "label column")
 
         # Find or set the task_category
-        task_category = self.task_category if self.task_category \
-            else self._find_task_category(dataset, label_column)
+        task_category = self.task_category if self.task_category else self._find_task_category(dataset, label_column)
 
         # Combine text pair columns with a separator token
         if self.text_pair_column:
@@ -85,11 +83,10 @@ class DatasetCleaner:
         if self.tokenize and isinstance(dataset[text_column][0], str):
             dataset = self._whitespace_tokenize(dataset, text_column)
 
-        # Set or create a label map for classification
+        # Set or create label map for classification tasks
         label_map = self.label_map
         if task_category in (TaskCategory.TOKEN_CLASSIFICATION, TaskCategory.TEXT_CLASSIFICATION):
-            dataset, label_map = (dataset, label_map) if label_map \
-                else self._create_label_map(dataset, label_column)
+            dataset, label_map = (dataset, label_map) if label_map else self._create_label_map(dataset, label_column)
 
             # Remove BIO encoding for token classification
             if task_category == TaskCategory.TOKEN_CLASSIFICATION and self.remove_bio_encoding:
@@ -106,8 +103,12 @@ class DatasetCleaner:
 
         # Log dataset info
         self._log_dataset_info(
-            text_column, label_column, label_map, task_category,
-            self.dataset_downsample, dataset_size=len(dataset)
+            text_column,
+            label_column,
+            label_map,
+            task_category,
+            self.dataset_downsample,
+            dataset_size=len(dataset),
         )
 
         return texts, labels, task_category
@@ -124,13 +125,10 @@ class DatasetCleaner:
                 "label", "ner_tag", "named_entities", "entities", "tag", "target", "category",
                 "class", "sentiment", "polarity", "emotion", "rating", "stance",
             ]
-        }
+        }  # fmt: skip
 
         columns = dataset.column_names
-        found_column = next(
-            (col for keyword in common_names[column_role] for col in columns if keyword in col),
-            None
-        )
+        found_column = next((col for keyword in common_names[column_role] for col in columns if keyword in col), None)
         if found_column is None:
             raise ValueError(
                 f"{column_role} not found in dataset: {dataset.column_names}. "
@@ -149,9 +147,7 @@ class DatasetCleaner:
             )
 
         dataset = dataset.map(
-            lambda dataset_row: {
-                text_column: dataset_row[text_column] + " [SEP] " + dataset_row[text_pair_column]
-            },
+            lambda dataset_row: {text_column: dataset_row[text_column] + " [SEP] " + dataset_row[text_pair_column]},
             desc="Merging text pair columns",
         )
 
@@ -192,10 +188,9 @@ class DatasetCleaner:
         return dataset.shuffle(seed=42).select(range(int(len(dataset) * ratio)))
 
     @staticmethod
-    def _cleanup_rows(
-            dataset: Dataset, text_column: str, label_column: str
-    ) -> Dataset:
+    def _cleanup_rows(dataset: Dataset, text_column: str, label_column: str) -> Dataset:
         """Filter out entries with empty or noisy texts and labels."""
+
         def is_valid_entry(dataset_row) -> bool:
             text, label = dataset_row[text_column], dataset_row[label_column]
 
@@ -205,7 +200,7 @@ class DatasetCleaner:
             if not isinstance(text, list):
                 text = [text]
 
-            bad_characters = ["\uFE0F"]  # emoji variation symbol '\uFE0F'
+            bad_characters = ["\ufe0f"]  # emoji variation symbol '\uFE0F'
             if any(char in t for t in text for char in bad_characters):
                 return False
 
@@ -234,7 +229,7 @@ class DatasetCleaner:
 
         dataset = dataset.map(
             lambda dataset_row: {label_column: label_to_id(dataset_row[label_column])},
-            desc="Converting string labels to integers"
+            desc="Converting string labels to integers",
         )
 
         return dataset, label_map
@@ -242,15 +237,18 @@ class DatasetCleaner:
     @staticmethod
     def _create_label_map(dataset: Dataset, label_column: str) -> tuple[Dataset, dict[str, int]]:
         """Find feature names to create label map, convert labels to integers if needed."""
-        label_names = getattr(
-            getattr(dataset.features[label_column], "feature", None), "names", None
-        ) or getattr(dataset.features[label_column], "names", None)
+        label_names = getattr(getattr(dataset.features[label_column], "feature", None), "names", None) or getattr(
+            dataset.features[label_column], "names", None
+        )
 
         if not label_names:
-            label_names = sorted(set(
-                    label for sublist in dataset[label_column]
+            label_names = sorted(
+                set(
+                    label
+                    for sublist in dataset[label_column]
                     for label in (sublist if isinstance(sublist, list) else [sublist])
-            ))
+                )
+            )
             label_names = [str(label) for label in label_names]
 
         label_map = {label: idx for idx, label in enumerate(label_names)}
@@ -264,7 +262,7 @@ class DatasetCleaner:
                         else [label_map[word_label] for word_label in label_column]
                     )
                 },
-                desc="Converting string labels to integers"
+                desc="Converting string labels to integers",
             )
         return dataset, label_map
 
@@ -283,14 +281,10 @@ class DatasetCleaner:
                 "when initializing the ranker label_map: dict[str, int] = ..."
             )
 
-        new_idx = {
-            old_idx: new_label_map[label.split("-")[-1]] for label, old_idx in label_map.items()
-        }
+        new_idx = {old_idx: new_label_map[label.split("-")[-1]] for label, old_idx in label_map.items()}
 
         dataset = dataset.map(
-            lambda dataset_entry: {
-                label_column: [new_idx[old_idx] for old_idx in dataset_entry[label_column]]
-            },
+            lambda dataset_entry: {label_column: [new_idx[old_idx] for old_idx in dataset_entry[label_column]]},
             desc="Removing BIO encoding",
         )
 
@@ -310,9 +304,7 @@ class DatasetCleaner:
         return dataset
 
     @staticmethod
-    def _log_dataset_info(
-            text_column, label_column, label_map, task_category, downsample_ratio, dataset_size
-    ) -> None:
+    def _log_dataset_info(text_column, label_column, label_map, task_category, downsample_ratio, dataset_size) -> None:
         """Log information about preprocessed dataset"""
         # Some details about dataset
         logger.info(
@@ -322,9 +314,7 @@ class DatasetCleaner:
 
         # Show dataset size
         if downsample_ratio and downsample_ratio < 1.0:
-            logger.info(
-                f"Dataset has been downsampled to {int(downsample_ratio * 100)}% of original size."
-            )
+            logger.info(f"Dataset has been downsampled to {int(downsample_ratio * 100)}% of original size.")
 
         # And the label map
         if task_category != TaskCategory.TEXT_REGRESSION:

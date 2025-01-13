@@ -54,9 +54,7 @@ def prepare_popular_models(model_size="base") -> list[str]:
     return large_models if model_size == "large" else base_models
 
 
-def configure_logger(
-    name: str, level: int = logging.INFO, log_to_console: bool = True
-) -> logging.Logger:
+def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool = True) -> logging.Logger:
     """
     Configure transformer-ranker logger.
 
@@ -143,10 +141,7 @@ class Result:
     def _format_results(self) -> str:
         """Helper method to return sorted results as a formatted string."""
         sorted_results = sorted(self._results.items(), key=lambda item: item[1], reverse=True)
-        result_lines = [
-            f"Rank {i + 1}. {model_name}: {score}"
-            for i, (model_name, score) in enumerate(sorted_results)
-        ]
+        result_lines = [f"Rank {i + 1}. {model_name}: {score}" for i, (model_name, score) in enumerate(sorted_results)]
         return "\n".join(result_lines)
 
     def __str__(self) -> str:

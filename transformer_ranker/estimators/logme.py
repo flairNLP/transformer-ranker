@@ -19,6 +19,7 @@ class LogME(Estimator):
         initial_beta: float = 1.0,
         max_iter: int = 11,
         tol: float = 1e-3,
+        **kwargs,
     ) -> float:
         """
         LogME intuition: estimate the evidence for embeddings by iteratively optimizing
@@ -31,14 +32,10 @@ class LogME(Estimator):
         :param initial_beta: Initial precision of the likelihood (controls the noise in the data)
         :param tol: Tolerance for the optimization convergence
         :param max_iter: Maximum iterations to optimize alpha and beta
-        :return: LogME score, where higher is better
+        :return: LogME score
         """
         embeddings = embeddings.to(torch.float64)
-        labels = (
-            labels.to(torch.float64).unsqueeze(-1)
-            if self.regression and labels.dim() == 1
-            else labels
-        )
+        labels = labels.to(torch.float64).unsqueeze(-1) if self.regression and labels.dim() == 1 else labels
 
         # Get the number of samples, number of classes, and the hidden size
         num_samples, hidden_size = embeddings.shape
@@ -46,7 +43,7 @@ class LogME(Estimator):
         num_classes = labels.shape[1] if self.regression else len(class_names)
 
         # SVD on the features
-        u, singular_values, v_transpose = torch.linalg.svd(embeddings, full_matrices=False)
+        u, singular_values, _ = torch.linalg.svd(embeddings, full_matrices=False)
 
         # Compute sigma which is the square of singular values
         sigma = singular_values.reshape(-1, 1) ** 2
@@ -59,9 +56,7 @@ class LogME(Estimator):
         # Loop over each class (for classification) or each target column (for regression)
         for i in range(num_classes):
             # Use one-hot vectors for classification and label columns for regression
-            labels_ = (
-                labels[:, i] if self.regression else (labels == class_names[i]).to(torch.float64)
-            )
+            labels_ = labels[:, i] if self.regression else (labels == class_names[i]).to(torch.float64)
             labels_ = labels_.unsqueeze(-1)
 
             # Project labels onto the singular vectors (x)
@@ -78,12 +73,8 @@ class LogME(Estimator):
             for _ in range(max_iter):
                 tau = alpha / beta  # Alpha-to-beta ratio, representing noise-to-signal
                 gamma = (sigma / (sigma + tau)).sum()
-                precision_weighted_sum = (
-                    sigma * projected_labels_squared / ((tau + sigma) ** 2)
-                ).sum()
-                residual_error = (
-                    projected_labels_squared / ((1 + sigma / tau) ** 2)
-                ).sum() + residual_sum_squares
+                precision_weighted_sum = (sigma * projected_labels_squared / ((tau + sigma) ** 2)).sum()
+                residual_error = (projected_labels_squared / ((1 + sigma / tau) ** 2)).sum() + residual_sum_squares
 
                 # Update alpha (prior precision) and beta (likelihood precision)
                 alpha = gamma / (precision_weighted_sum + 1e-5)

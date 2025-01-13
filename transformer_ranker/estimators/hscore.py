@@ -17,7 +17,7 @@ class HScore(Estimator):
 
         super().__init__(regression=regression)
 
-    def fit(self, embeddings: torch.Tensor, labels: torch.Tensor) -> float:
+    def fit(self, embeddings: torch.Tensor, labels: torch.Tensor, **kwargs) -> float:
         """
         H-score intuition: higher variance between embeddings of different classes
         (mean vectors for each class) and lower feature redundancy (i.e. inverse of the covariance
@@ -25,7 +25,7 @@ class HScore(Estimator):
 
         :param embeddings: Embedding tensor (num_samples, hidden_size)
         :param labels: Label tensor (num_samples,)
-        :return: H-score, where higher is better.
+        :return: H-score
         """
         # Center all embeddings
         embeddings = embeddings.to(torch.float64)
@@ -58,9 +58,7 @@ class HScore(Estimator):
         pinv_covf_alpha = torch.linalg.pinv(covf_alpha, rcond=1e-15)
 
         # Matrix of class-conditioned means
-        class_means = torch.zeros(
-            num_classes, hidden_size, dtype=torch.float64, device=embeddings.device
-        )
+        class_means = torch.zeros(num_classes, hidden_size, dtype=torch.float64, device=embeddings.device)
         for i, cls in enumerate(classes):
             mask = labels == cls
             class_features = embeddings[mask].mean(dim=0)
