@@ -1,9 +1,18 @@
 [tool.pytest.ini_options]
-pythonpath = [
-  "."
-]
+pythonpath = "."
 
 [tool.mypy]
 files="transformer_ranker"
 ignore_missing_imports = true
 check_untyped_defs = true
+
+[tool.ruff]
+line-length = 120
+exclude = ["examples/*"]
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+
+[tool.ruff.format]
+quote-style = "double"
+skip-magic-trailing-comma = false
