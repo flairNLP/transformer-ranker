@@ -17,7 +17,7 @@ class Embedder:
         sentence_pooling: Optional[str] = None,
         use_pretokenizer: bool = True,
         local_files_only: bool = False,
-        device: Optional[Union[str, torch.device]] = None
+        device: Optional[str] = None,
     ):
         """
         Embed texts using a pre-trained transformer model. It's a word-level embedder, where
@@ -47,9 +47,7 @@ class Embedder:
         else:
             tokenizer_source = tokenizer if isinstance(tokenizer, str) else self.model_name
             self.tokenizer = AutoTokenizer.from_pretrained(
-                tokenizer_source,
-                add_prefix_space=True,
-                clean_up_tokenization_spaces=True,
+                tokenizer_source, add_prefix_space=True, clean_up_tokenization_spaces=True
             )
 
         # Add padding token for models that do not have it (e.g. GPT2)
@@ -72,22 +70,17 @@ class Embedder:
         self.sentence_pooling = sentence_pooling
 
         # Move model to device
-        self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.device = device or "cuda" if torch.cuda.is_available() else "cpu"
         self.model = self.model.to(self.device)
 
     def tokenize(self, sentences):
         """Tokenize sentences using auto tokenizer"""
         # Handle tokenizers with wrong model_max_length in hf configuration
-        max_sequence_length = (
-            self.tokenizer.model_max_length if self.tokenizer.model_max_length < 1000000 else 512
-        )
+        max_sequence_length = self.tokenizer.model_max_length if self.tokenizer.model_max_length < 1000000 else 512
 
         # Pre-tokenize sentences using hf whitespace tokenizer
         if self.pre_tokenizer and isinstance(sentences[0], str):
-            sentences = [
-                [word for word, word_offsets in self.pre_tokenizer.pre_tokenize_str(sentence)]
-                for sentence in sentences
-            ]
+            sentences = [[word for word, _ in self.pre_tokenizer.pre_tokenize_str(sentence)] for sentence in sentences]
 
         is_split_into_words = not isinstance(sentences[0], str)
 
@@ -102,11 +95,7 @@ class Embedder:
         )
 
     def embed(
-        self,
-        sentences,
-        batch_size: int = 32,
-        show_loading_bar: bool = True,
-        move_embeddings_to_cpu: bool = True,
+        self, sentences, batch_size: int = 32, show_loading_bar: bool = True, move_embeddings_to_cpu: bool = True
     ) -> list[torch.Tensor]:
         """Split sentences into batches and embedd the full dataset"""
         if not isinstance(sentences, list):
@@ -117,10 +106,7 @@ class Embedder:
         tqdm_bar_format = "{l_bar}{bar:10}{r_bar}{bar:-10b}"
 
         for batch in tqdm(
-            batches,
-            desc="Retrieving Embeddings",
-            disable=not show_loading_bar,
-            bar_format=tqdm_bar_format,
+            batches, desc="Retrieving Embeddings", disable=not show_loading_bar, bar_format=tqdm_bar_format
         ):
             embeddings.extend(self.embed_batch(batch, move_embeddings_to_cpu))
 
@@ -136,7 +122,7 @@ class Embedder:
         attention_mask = tokenized_input["attention_mask"].to(self.device)
         word_ids = [tokenized_input.word_ids(i) for i in range(len(sentences))]
 
-        # Embedd: forward pass to get all hidden states of the model
+        # Embed: forward pass to get all hidden states of a model
         with torch.no_grad():
             hidden_states = self.model(
                 input_ids, attention_mask=attention_mask, output_hidden_states=True
@@ -155,7 +141,6 @@ class Embedder:
         # Go through each sentence separately
         sentence_embeddings = []
         for subword_embeddings, word_ids in zip(embeddings, word_ids):
-
             # Pool sub-words to get word-level embeddings
             word_embedding_list = self._pool_subwords(subword_embeddings, word_ids)
 
@@ -163,16 +148,12 @@ class Embedder:
             word_embeddings = torch.stack(word_embedding_list, dim=0)
 
             # Pool word-level embeddings into a sentence embedding
-            sentence_embedding = (
-                self._pool_words(word_embeddings) if self.sentence_pooling else word_embeddings
-            )
+            sentence_embedding = self._pool_words(word_embeddings) if self.sentence_pooling else word_embeddings
 
             sentence_embeddings.append(sentence_embedding)
 
         if move_embeddings_to_cpu:
-            sentence_embeddings = [
-                sentence_embedding.cpu() for sentence_embedding in sentence_embeddings
-            ]
+            sentence_embeddings = [sentence_embedding.cpu() for sentence_embedding in sentence_embeddings]
 
         return sentence_embeddings
 
@@ -188,7 +169,7 @@ class Embedder:
 
         if not new_layer_ids:
             raise ValueError(
-                f'Given layer_ids are out of bounds for the model size. '
+                f"Given layer_ids are out of bounds for the model size. "
                 f"Num layers in model {self.model_name}: {num_layers}"
             )
 
@@ -198,8 +179,7 @@ class Embedder:
         """Keep only relevant layers in each embedding and apply layer-wise pooling if required"""
         # Use positive layer ids ('-1 -> 23' is the last layer in a 24 layer model)
         layer_ids = sorted(
-            (layer_id if layer_id >= 0 else self.num_transformer_layers + layer_id)
-            for layer_id in self.layer_ids
+            (layer_id if layer_id >= 0 else self.num_transformer_layers + layer_id) for layer_id in self.layer_ids
         )
 
         # Embeddings shape: (batch_size, seq_len, num_layers, hidden_size)
@@ -220,7 +200,6 @@ class Embedder:
 
         # Gather word-level embeddings as lists of sub-words
         for token_embedding, word_id in zip(sentence_embedding, sentence_word_ids):
-
             # Stack all sub-words into a word tensor
             if previous_word_id != word_id and subword_embeddings:
                 word_embeddings.append(torch.stack(subword_embeddings, dim=0))
@@ -241,9 +220,7 @@ class Embedder:
             word_embeddings = [word_embedding[-1] for word_embedding in word_embeddings]
 
         if self.subword_pooling == "mean":
-            word_embeddings = [
-                torch.mean(word_embedding, dim=0) for word_embedding in word_embeddings
-            ]
+            word_embeddings = [torch.mean(word_embedding, dim=0) for word_embedding in word_embeddings]
 
         return word_embeddings
 
