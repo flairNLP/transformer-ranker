@@ -23,7 +23,7 @@ class TransformerRanker:
         **kwargs: Any,
     ):
         """
-        Prepare dataset and transferability metrics.
+        Preprocess a dataset and prepare a list of transferability metrics.
 
         :param dataset: a dataset from huggingface with texts and labels.
         :param dataset_downsample: a fraction to which the dataset should be reduced.
@@ -44,7 +44,12 @@ class TransformerRanker:
         self.texts, self.labels, self.task_category = datacleaner.prepare_dataset(dataset)
 
         # Supported metrics
-        self.transferability_metrics = {"logme": LogME, "hscore": HScore, "knn": NearestNeighbors}
+        self.transferability_metrics = {
+            "logme": LogME,
+            "hscore": HScore,
+            "knn": NearestNeighbors,
+        }
+
 
     def run(
         self,
@@ -112,7 +117,7 @@ class TransformerRanker:
 
             # Gather embeddings
             embeddings = embedder.embed(
-                self.texts, batch_size=batch_size, show_loading_bar=True, move_embeddings_to_cpu=not gpu_estimation
+                self.texts, batch_size=batch_size, show_progress=True, unpack_to_cpu=not gpu_estimation
             )
 
             # Prepare all embeddings in one list
@@ -165,7 +170,7 @@ class TransformerRanker:
             try:
                 Embedder(model_name, local_files_only=True, device=device)
                 cached_models.append(model_name)
-            except OSError:
+            except (OSError, RuntimeError):
                 download_models.append(model_name)
 
         logger.info(f"Models found in cache: {cached_models}") if cached_models else None

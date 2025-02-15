@@ -1,7 +1,7 @@
-from typing import Optional, Union
+from typing import Optional, Union, Any
 
 import torch
-from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.pre_tokenizers import PreTokenizer
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer, PreTrainedTokenizerFast
 
@@ -9,123 +9,153 @@ from transformers import AutoModel, AutoTokenizer, PreTrainedTokenizerFast
 class Embedder:
     def __init__(
         self,
-        model: Union[str, torch.nn.Module],
-        tokenizer: Union[str, PreTrainedTokenizerFast, None] = None,
-        layer_ids: str = "all",
+        model: Union[str, torch.nn.Module] = "microsoft/deberta-v3-base",
+        tokenizer: Optional[Union[str, PreTrainedTokenizerFast]] = None,
+        pre_tokenizer: Optional[PreTokenizer] = None,
         subword_pooling: str = "mean",
+        sentence_pooling: Optional[str] = None ,
         layer_pooling: Optional[str] = None,
-        sentence_pooling: Optional[str] = None,
-        use_pretokenizer: bool = True,
+        layer_ids: str = "all",
         local_files_only: bool = False,
         device: Optional[str] = None,
     ):
         """
-        Embed texts using a pre-trained transformer model. It's a word-level embedder, where
-        each text is a list of word embeddings. Supports sub-word and sentence pooling options.
-        ♻️ Feel free to use it if you need a simple implementation for word or text embeddings.
+        Uses a pre-trained language model to embed texts. It works at word level, with each text
+        resulting in a list of word embeddings. Supports various sub-word and word pooling options.
+        ♻️ Feel free to use it for a simple text embedding implementation.
 
-        :param model: Model name 'bert-base-uncased' or a model instance loaded with AutoModel
+        :param model: Model name 'microsoft/deberta-v3-base' or a model instance loaded with AutoModel
         :param tokenizer: Optional tokenizer, either a string name or a tokenizer instance.
         :param subword_pooling: Method for pooling sub-words into word embeddings.
-        :param layer_ids: Layers to use e.g., '-1' for the top-most layer or 'all'.
-        :param layer_pooling: Optional method for pooling across selected layers.
+        :param layer_ids: Layers to use e.g., '0,1,2' for the first three layers or 'all'.
+        :param layer_pooling: Optional method for averaging selected layers.
         :param use_pretokenizer: Whether to pre-tokenize texts using whitespace.
         :param device: Device option, either 'cpu' or 'cuda:0'. Defaults to the available device.
         """
-        # Load transformer model
-        if isinstance(model, torch.nn.Module):
-            self.model = model
-            self.model_name = model.config.name_or_path
-        else:
-            self.model = AutoModel.from_pretrained(model, local_files_only=local_files_only)
-            self.model_name = model
+        # Setup model and tokenizer
+        self._init_model(model, local_files_only)
+        self._init_tokenizer(tokenizer)
+        self.pre_tokenizer = pre_tokenizer
 
-        # Load a model-specific tokenizer
-        self.tokenizer: PreTrainedTokenizerFast
-        if isinstance(tokenizer, PreTrainedTokenizerFast):
-            self.tokenizer = tokenizer
-        else:
-            tokenizer_source = tokenizer if isinstance(tokenizer, str) else self.model_name
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                tokenizer_source, add_prefix_space=True, clean_up_tokenization_spaces=True
-            )
+        # Store model details
+        self.hidden_size = self.model.config.hidden_size
+        self.num_layers = self.model.config.num_hidden_layers
+        self.layer_ids = self._parse_layer_ids(layer_ids)
 
-        # Add padding token for models that do not have it (e.g. GPT2)
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-            self.model.resize_token_embeddings(len(self.tokenizer))
-
-        # Use whitespace pre-tokenizer if specified
-        self.pre_tokenizer = Whitespace() if use_pretokenizer else None
-
-        # Get number of layers from config
-        self.num_transformer_layers = self.model.config.num_hidden_layers
-
-        # Set relevant layers that will be used for embeddings
-        self.layer_ids = self._filter_layer_ids(layer_ids)
-
-        # Set pooling options
+        # Set word, sentence pooling options
         self.subword_pooling = subword_pooling
-        self.layer_pooling = layer_pooling
         self.sentence_pooling = sentence_pooling
+        self.layer_pooling = layer_pooling
 
-        # Move model to device
+        # Device setup
         self.device = device or "cuda" if torch.cuda.is_available() else "cpu"
         self.model = self.model.to(self.device)
 
-    def tokenize(self, sentences):
-        """Tokenize sentences using auto tokenizer"""
+    def _init_model(self, model: Union[str, torch.nn.Module], local_files_only: bool) -> None:
+        """Load different hf models using AutoModel class"""
+        try:
+            if isinstance(model, torch.nn.Module):
+                self.model = model
+                self.model_name = model.config.name_or_path
+            else:
+                self.model_name = model
+                self.model = AutoModel.from_pretrained(model, local_files_only=local_files_only)
+
+            self.num_layers = self.model.config.num_hidden_layers
+            self.hidden_size = self.model.config.hidden_size
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize model '{model}': {str(e)}")
+
+    def _init_tokenizer(self, tokenizer: Union[str, PreTrainedTokenizerFast, None]) -> None:
+        """Initialize the tokenizer."""
+        try:
+            if isinstance(tokenizer, PreTrainedTokenizerFast):
+                self.tokenizer = tokenizer
+            else:
+                tokenizer_name = tokenizer or self.model_name
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    tokenizer_name,
+                    add_prefix_space=True,
+                    clean_up_tokenization_spaces=True,
+                )
+
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+                self.model.resize_token_embeddings(len(self.tokenizer))
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize tokenizer: {str(e)}")
+
+    def embed(
+        self,
+        sentences: Union[str, list[str]],
+        batch_size: int = 32,
+        show_progress: bool = True,
+        unpack_to_cpu: bool = True
+    ) -> list[torch.Tensor]:
+        """Split sentences into batches and embed the dataset"""
+        sentences = [sentences] if isinstance(sentences, str) else sentences
+        batches = [sentences[i:i + batch_size] for i in range(0, len(sentences), batch_size)]
+
+        embeddings = []
+        progress_bar = tqdm(
+            batches,
+            desc="Retrieving embeddings:",
+            disable=not show_progress,
+            bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}"
+        )
+
+        for batch in progress_bar:
+            batch_embeddings = self._embed_batch(batch, unpack_to_cpu)
+            embeddings.extend(batch_embeddings)
+
+        return embeddings
+
+    def tokenize(self, sentences: Union[list[str], list[list[str]]]) -> dict[str, Any]:
+        """Tokenize sentences using AutoTokenizer"""
+        if self.pre_tokenizer and isinstance(sentences[0], str):
+            sentences = self._pretokenize(sentences)
+
         # Handle tokenizers with wrong model_max_length in hf configuration
         max_sequence_length = self.tokenizer.model_max_length if self.tokenizer.model_max_length < 1000000 else 512
 
-        # Pre-tokenize sentences using hf whitespace tokenizer
-        if self.pre_tokenizer and isinstance(sentences[0], str):
-            sentences = [[word for word, _ in self.pre_tokenizer.pre_tokenize_str(sentence)] for sentence in sentences]
-
-        is_split_into_words = not isinstance(sentences[0], str)
-
-        # Use model-specific tokenizer and return output as tensors
-        return self.tokenizer(
+        tokenized = self.tokenizer(
             sentences,
             padding=True,
             truncation=True,
             max_length=max_sequence_length,
             return_tensors="pt",
-            is_split_into_words=is_split_into_words,
+            is_split_into_words=not isinstance(sentences[0], str),
         )
 
-    def embed(
-        self, sentences, batch_size: int = 32, show_loading_bar: bool = True, move_embeddings_to_cpu: bool = True
-    ) -> list[torch.Tensor]:
-        """Split sentences into batches and embedd the full dataset"""
-        if not isinstance(sentences, list):
-            sentences = [sentences]
+        # Move tensors to device and add word_ids
+        return {
+            "input_ids": tokenized["input_ids"].to(self.device),
+            "attention_mask": tokenized["attention_mask"].to(self.device),
+            "word_ids": [tokenized.word_ids(i) for i in range(len(sentences))]
+        }
 
-        batches = [sentences[i : i + batch_size] for i in range(0, len(sentences), batch_size)]
-        embeddings = []
-        tqdm_bar_format = "{l_bar}{bar:10}{r_bar}{bar:-10b}"
+    def _pretokenize(self, sentences: list[str]) -> list[list[str]]:
+        """Pre-tokenize sentences using whitespace tokenizer if configured."""
+        sentences = [
+            [word for word, _ in self.pre_tokenizer.pre_tokenize_str(sentence)]
+            for sentence in sentences
+        ]
+        return sentences
 
-        for batch in tqdm(
-            batches, desc="Retrieving Embeddings", disable=not show_loading_bar, bar_format=tqdm_bar_format
-        ):
-            embeddings.extend(self.embed_batch(batch, move_embeddings_to_cpu))
-
-        return embeddings
-
-    def embed_batch(self, sentences, move_embeddings_to_cpu: bool = True) -> list[torch.Tensor]:
+    def _embed_batch(self, sentences, unpack_to_cpu: bool = True) -> list[torch.Tensor]:
         """Embeds a batch of sentences and returns a list of sentence embeddings
         (list of word embeddings). Embeddings can be moved to cpu or kept on gpu"""
         tokenized_input = self.tokenize(sentences)
+        word_ids = tokenized_input["word_ids"]
 
-        # Move inputs to gpu
-        input_ids = tokenized_input["input_ids"].to(self.device)
-        attention_mask = tokenized_input["attention_mask"].to(self.device)
-        word_ids = [tokenized_input.word_ids(i) for i in range(len(sentences))]
-
-        # Embed: forward pass to get all hidden states of a model
+        # Embed: forward pass to get all hidden states of the model
         with torch.no_grad():
             hidden_states = self.model(
-                input_ids, attention_mask=attention_mask, output_hidden_states=True
+                tokenized_input["input_ids"],
+                attention_mask=tokenized_input["attention_mask"],
+                output_hidden_states=True
             ).hidden_states
 
         # Exclude the embedding layer (index 0)
@@ -133,12 +163,11 @@ class Embedder:
         embeddings = embeddings.permute(1, 2, 0, 3)
 
         # Multiply embeddings by attention mask to have padded tokens as 0
-        embeddings = embeddings * attention_mask.unsqueeze(-1).unsqueeze(-1)
+        embeddings = embeddings * tokenized_input["attention_mask"].unsqueeze(-1).unsqueeze(-1)
 
         # Extract and average specified layers
-        embeddings = self._extract_relevant_layers(embeddings)
+        embeddings = self._aggregate_layers(embeddings)
 
-        # Go through each sentence separately
         sentence_embeddings = []
         for subword_embeddings, word_ids in zip(embeddings, word_ids):
             # Pool sub-words to get word-level embeddings
@@ -149,18 +178,16 @@ class Embedder:
 
             # Pool word-level embeddings into a sentence embedding
             sentence_embedding = self._pool_words(word_embeddings) if self.sentence_pooling else word_embeddings
-
             sentence_embeddings.append(sentence_embedding)
 
-        if move_embeddings_to_cpu:
+        if unpack_to_cpu:
             sentence_embeddings = [sentence_embedding.cpu() for sentence_embedding in sentence_embeddings]
 
         return sentence_embeddings
 
-    def _filter_layer_ids(self, layer_ids: str) -> list[int]:
-        """Transform a string with layer ids into a list of ints.
-        Check if any ids are out-of-bounds of model size"""
-        num_layers = self.num_transformer_layers
+    def _parse_layer_ids(self, layer_ids: str) -> list[int]:
+        """Parse layer ids from a string"""
+        num_layers = self.num_layers
         if layer_ids == "all":
             new_layer_ids = [-i for i in range(1, num_layers + 1)]
         else:
@@ -175,11 +202,11 @@ class Embedder:
 
         return new_layer_ids
 
-    def _extract_relevant_layers(self, batched_embeddings: torch.Tensor) -> torch.Tensor:
-        """Keep only relevant layers in each embedding and apply layer-wise pooling if required"""
+    def _aggregate_layers(self, batched_embeddings: torch.Tensor) -> torch.Tensor:
+        """Select and average layers"""
         # Use positive layer ids ('-1 -> 23' is the last layer in a 24 layer model)
         layer_ids = sorted(
-            (layer_id if layer_id >= 0 else self.num_transformer_layers + layer_id) for layer_id in self.layer_ids
+            (layer_id if layer_id >= 0 else self.num_layers + layer_id) for layer_id in self.layer_ids
         )
 
         # Embeddings shape: (batch_size, seq_len, num_layers, hidden_size)
