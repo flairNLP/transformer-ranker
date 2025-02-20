@@ -23,23 +23,21 @@ class TransformerRanker:
         **kwargs: Any,
     ):
         """
-        Preprocess a dataset and prepare a list of transferability metrics.
+        Processes a dataset and prepares a list of metrics to evaluate transferability.
 
         :param dataset: a dataset from huggingface with texts and labels.
         :param dataset_downsample: a fraction to which the dataset should be reduced.
+        :param text_column: the name of the column containing text data.
+        :param label_column: the name of the column containing label data.
         :param kwargs: additional dataset-specific parameters for data cleaning.
         """
-        # Prepare dataset, downsample it
+        # Preprocess and down-sample a dataset
         datacleaner = DatasetCleaner(
             dataset_downsample=dataset_downsample,
             text_column=text_column,
             label_column=label_column,
             **kwargs,
         )
-
-        self.texts: Union[list[str], list[list[str]]]
-        self.labels: torch.Tensor
-        self.task_category: TaskCategory
 
         self.texts, self.labels, self.task_category = datacleaner.prepare_dataset(dataset)
 
@@ -50,143 +48,133 @@ class TransformerRanker:
             "knn": NearestNeighbors,
         }
 
-
     def run(
         self,
         models: list[Union[str, torch.nn.Module]],
-        batch_size: int = 32,
         estimator: str = "hscore",
         layer_aggregator: str = "layermean",
-        sentence_pooling: str = "mean",
-        device: Optional[str] = None,
-        gpu_estimation: bool = True,
+        batch_size: int = 32,
         **kwargs: Any,
     ):
         """
-        Load models, iterate through each to gather embeddings and score them.
-        Embeddings can be averaged across all layers or selected from the best scoring layer.
+        Loads models, collects embeddings, and scores them using transferability metrics.
 
         :param models: A list of model names
         :param batch_size: The number of samples to process in each batch, defaults to 32.
-        :param estimator: Transferability metric (e.g., 'hscore', 'logme', 'knn').
-        :param layer_aggregator: Which layer to select (e.g., 'layermean', 'bestlayer').
-        :param sentence_pooling: Embedder parameter for pooling words into a sentence embedding for
-        text classification tasks. Defaults to "mean" to average of all words.
+        :param estimator: Transferability metric ('hscore', 'logme', 'knn').
+        :param layer_aggregator: Method to aggregate layers ('lastlayer', 'layermean', 'bestlayer').
         :param device: Device for embedding, defaults to GPU if available ('cpu', 'cuda', 'cuda:2').
         :param gpu_estimation: Store and score embeddings on GPU for speedup.
-        :param kwargs: Additional parameters for the embedder class (e.g. subword pooling)
+        :param kwargs: Additional parameters for the embedder class (device, sentence_pooling, etc.)
         :return: Returns the sorted dictionary of model names and their scores
         """
         self._confirm_ranker_setup(estimator=estimator, layer_aggregator=layer_aggregator)
 
-        device = device or "cuda" if torch.cuda.is_available() else "cpu"
+        device = kwargs.pop("device", None)
+        gpu_estimation = kwargs.get("gpu_estimation", True)
 
-        # Load all transformers into hf cache
-        self._preload_transformers(models=models, device=device)
-
-        # Device for transferability estimation
-        if gpu_estimation:
-            self.labels = self.labels.to(device)
+        # Download models to hf cache
+        self._preload_models(models=models, device=device)
 
         # Set transferability metric
         regression = self.task_category == TaskCategory.TEXT_REGRESSION
         metric = self.transferability_metrics[estimator](regression=regression)
 
-        # Store all results in a dictionary
-        ranking_results = Result(metric=estimator)
+        if gpu_estimation:  # set device for the metric
+            self.labels = self.labels.to(device)
 
-        # Iterate over each model and score it
+        result = Result(metric=estimator)
+
         for model in models:
-            # Select model layers: last layer or all layers
-            layer_ids = "-1" if layer_aggregator == "lastlayer" else "all"
-            layer_pooling = "mean" if "mean" in layer_aggregator else None
-
             effective_sentence_pooling = (
-                None if self.task_category == TaskCategory.TOKEN_CLASSIFICATION else sentence_pooling
+                None if self.task_category == TaskCategory.TOKEN_CLASSIFICATION else kwargs.get("sentence_pooling", "mean")
             )
 
-            # Prepare embedder with word, sentence, and layer pooling
+            # Setup the embedder
             embedder = Embedder(
                 model=model,
-                layer_ids=layer_ids,
-                layer_pooling=layer_pooling,
+                layer_ids="0" if layer_aggregator == "lastlayer" else "all",
+                layer_mean=True if "mean" in layer_aggregator else False,
                 sentence_pooling=effective_sentence_pooling,
                 device=device,
                 **kwargs,
             )
 
-            # Gather embeddings
+            # Collect embeddings
             embeddings = embedder.embed(
                 self.texts, batch_size=batch_size, show_progress=True, unpack_to_cpu=not gpu_estimation
             )
 
-            # Prepare all embeddings in one list
+            # Flatten them for ner tasks
             if self.task_category == TaskCategory.TOKEN_CLASSIFICATION:
                 embeddings = [word for sentence in embeddings for word in sentence]
 
-            model_name = embedder.model_name
-            embedded_layer_ids = embedder.layer_ids
-            num_layers = embeddings[0].size(0)
-
-            # Remove model from memory
-            del embedder
+            model_name = embedder.name
+            del embedder  # remove from memory
             torch.cuda.empty_cache()
 
-            # Estimate scores for each layer
-            layer_scores = []
-            tqdm_bar_format = "{l_bar}{bar:10}{r_bar}{bar:-10b}"
-            for layer_id in tqdm(range(num_layers), desc="Transferability Score", bar_format=tqdm_bar_format):
-                # Get the position of layer index
-                layer_index = embedded_layer_ids[layer_id]
+            # Compute transferability
+            score = self._transferability_score(embeddings, metric, layer_aggregator)
 
-                # Stack embeddings for that layer
-                layer_embeddings = torch.stack([word_embedding[layer_index] for word_embedding in embeddings])
+            # Store and log results
+            result[model_name] = score
+            logger.info(f"{model_name}, {result.metric}: {result[model_name]:.2f}")
 
-                # Estimate transferability
-                score = metric.fit(embeddings=layer_embeddings, labels=self.labels)
-                layer_scores.append(round(score, 4))
+        return result
 
-            # Store scores for each layer in the result dictionary
-            ranking_results.layerwise_scores[model_name] = dict(zip(embedded_layer_ids, layer_scores))
+    def _transferability_score(self, embeddings, metric, layer_aggregator, show_progress=True):
+        """Compute transferability for model embeddings."""
+        tqdm_bar_format = "{l_bar}{bar:10}{r_bar}{bar:-10b}"
+        num_layers, scores_per_layer = len(embeddings[0]), []  # lastlayer and layermean will dave dim 1
 
-            # Aggregate layer scores
-            final_score = max(layer_scores) if layer_aggregator == "bestlayer" else layer_scores[0]
-            ranking_results.add_score(model_name, final_score)
+        transferability_progress = tqdm(
+            range(num_layers), desc="Transferability score", bar_format=tqdm_bar_format, disable=not show_progress
+        )
 
-            # Log the final score along with scores for each layer
-            result_log = f"{model_name} estimation: {final_score} ({ranking_results.metric})"
-            if layer_aggregator == "bestlayer":
-                result_log += f", scores for each layer: {ranking_results.layerwise_scores[model_name]}"
+        # Score each layer separately
+        for layer_id in transferability_progress:
+            layer_embeddings = torch.stack([emb[layer_id] for emb in embeddings])
+            score = metric.fit(embeddings=layer_embeddings, labels=self.labels)
+            scores_per_layer.append(score)
 
-            logger.info(result_log)
+        # Aggregate scores
+        if layer_aggregator == "bestlayer":
+            return max(scores_per_layer)
+        elif layer_aggregator == "layermean":
+            return sum(scores_per_layer) / len(scores_per_layer)
+        else:
+            return scores_per_layer[0]  # score of the last hidden state score.
 
-        return ranking_results
+    def _preload_models(self, models: list[str], device: Optional[str] = None) -> None:
+        """Load models to HuggingFace cache, optimized to avoid redundant loads."""
+        cached_models, downloaded_models = set(), set()
 
-    @staticmethod
-    def _preload_transformers(models: list[Union[str, torch.nn.Module]], device: Optional[str] = None) -> None:
-        """Load models to HuggingFace cache"""
-        cached_models, download_models = [], []
-        for model_name in models:
+        for model in models:
             try:
-                Embedder(model_name, local_files_only=True, device=device)
-                cached_models.append(model_name)
+                Embedder(model, local_files_only=True, device=device)
+                cached_models.add(model)
             except (OSError, RuntimeError):
-                download_models.append(model_name)
+                downloaded_models.add(model)
 
-        logger.info(f"Models found in cache: {cached_models}") if cached_models else None
-        logger.info(f"Downloading models: {download_models}") if download_models else None
+        if cached_models:
+            logger.info(f"Models found in cache: {cached_models}")
 
-        for model_name in models:
-            Embedder(model_name, device=device)
+        if downloaded_models:
+            logger.info(f"Downloading models: {downloaded_models}")
 
-    def _confirm_ranker_setup(self, estimator, layer_aggregator) -> None:
-        """Validate estimator and layer pooling"""
-        valid_estimators = self.transferability_metrics.keys()
-        if estimator not in valid_estimators:
-            raise ValueError(f"Unsupported estimation method: {estimator}. Use one of the following {valid_estimators}")
+            for model in downloaded_models:
+                Embedder(model, device=device)
 
-        valid_layer_pooling = ["layermean", "lastlayer", "bestlayer"]
-        if layer_aggregator not in valid_layer_pooling:
+    def _confirm_ranker_setup(self, estimator: str, layer_aggregator: str) -> None:
+        """Confirm main parameters in the run method"""
+        available_metrics = self.transferability_metrics.keys()
+        if estimator not in available_metrics:
             raise ValueError(
-                f"Unsupported layer pooling: {layer_aggregator}. Use one of the following {valid_layer_pooling}"
+                f"Unsupported metric '{estimator}'. Valid options: {', '.join(available_metrics)}"
+            )
+
+        available_layer_pooling = {"layermean", "lastlayer", "bestlayer"}
+        if layer_aggregator not in available_layer_pooling:
+            raise ValueError(
+                f"Unsupported aggregation '{layer_aggregator}'. Valid options: {', '.join(available_layer_pooling)}"
             )
