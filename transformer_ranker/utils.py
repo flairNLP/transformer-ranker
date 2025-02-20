@@ -6,7 +6,8 @@ from transformers import logging as transformers_logging
 
 
 def prepare_popular_models(model_size="base") -> list[str]:
-    """Two lists of language models to try out"""
+    """Two lists of pretrained models to try out"""
+
     base_models = [
         # English models
         "distilbert-base-cased",
@@ -56,7 +57,7 @@ def prepare_popular_models(model_size="base") -> list[str]:
 
 def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool = True) -> logging.Logger:
     """
-    Configure transformer-ranker logger.
+    Configure the package's logger.
 
     :param name: The name of the logger.
     :param level: The logging level (default: logging.INFO).
@@ -72,12 +73,12 @@ def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool 
         console_handler.setFormatter(logging.Formatter("transformer_ranker:%(message)s"))
         logger.addHandler(console_handler)
 
-    # Ignore specific warning messages from transformers and datasets libraries
+    # Suppress future and user warnings
     warnings.simplefilter("ignore", category=FutureWarning)
     warnings.simplefilter("ignore", category=UserWarning)
     transformers_logging.set_verbosity_error()
 
-    # Suppress transformers warning about unused prediction head weights if the model is frozen
+    # Suppress unused weights messages when loading models
     logger.addFilter(
         lambda record: not (
             "Some weights of BertModel were not initialized" in record.getMessage()
@@ -90,64 +91,48 @@ def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool 
 
 
 class Result:
+    """Store model names and transferability scores in a dictionary-like result"""
+
     def __init__(self, metric: str):
-        """Store all rankings and transferability scores in Result.
-        Includes scores for each layer in "layer_estimates".
-
-        param metric: metric name (e.g. "hscore", or "logme")
-        """
         self.metric = metric
-        self._results: dict[str, float] = {}
-        self.layerwise_scores: dict[str, dict[int, float]] = {}
+        self._scores = {}
+        self._layer_scores = {}
 
-    @property
-    def results(self) -> dict[str, float]:
-        """Return the result dictionary sorted by scores in descending order"""
-        return dict(sorted(self._results.items(), key=lambda x: x[1], reverse=True))
+    def score_summary(self):
+        """Sort scores and print them with rankings."""
+        if not self._scores:
+            return "No scores available."
 
-    @property
+        sorted_scores = sorted(self._scores.items(), key=lambda item: item[1], reverse=True)
+        model_rank = [f"Rank {i+1}. {model}: {score:.2f}" for i, (model, score) in enumerate(sorted_scores)]
+        return "\n".join(model_rank)
+
+    def append(self, other: "Result") -> None:
+        """Allow to run rankings multiple times and append results"""
+        if self.metric != other.metric:
+            raise ValueError(f"Metrics do not match ({self.metric} and {other.metric})! Run the ranking using the same metric.")
+
+        self._scores.update(other._scores)
+        self._layer_scores.update(other._layer_scores)
+
     def best_model(self) -> str:
-        """Return the highest scoring model"""
-        model_name, _ = max(self.results.items(), key=lambda item: item[1])
-        return model_name
+        """Show the model with the highest transferability score"""
+        if not self._scores:
+            return None
+        return max(self._scores, key=self._scores.get)
 
     @property
-    def top_three(self) -> dict[str, float]:
-        """Return three highest scoring models"""
-        return {k: self.results[k] for k in list(self.results.keys())[: min(3, len(self.results))]}
+    def layer_scores(self):
+        return self._layer_scores
 
-    @property
-    def best_layers(self) -> dict[str, int]:
-        """Return a dictionary mapping each model name to its best layer ID."""
-        best_layers_dict = {}
-        for model, values in self.layerwise_scores.items():
-            best_layer = max(values.items(), key=operator.itemgetter(1))[0]
-            best_layers_dict[model] = best_layer
-        return best_layers_dict
+    def __getitem__(self, model_name: str):
+        return self._scores.get(model_name)
 
-    def add_score(self, model_name, score) -> None:
-        self._results[model_name] = score
+    def __setitem__(self, model_name: str, score: float):
+        self._scores[model_name] = score
 
-    def append(self, additional_results: "Result") -> None:
-        if isinstance(additional_results, Result):
-            self._results.update(additional_results.results)
-            self.layerwise_scores.update(additional_results.layerwise_scores)
-        else:
-            raise ValueError(
-                f"Expected an instance of 'Result', but got {type(additional_results).__name__}. "
-                f"Only 'Result' instances can be appended."
-            )
+    def __str__(self):
+        return self.score_summary()
 
-    def _format_results(self) -> str:
-        """Helper method to return sorted results as a formatted string."""
-        sorted_results = sorted(self._results.items(), key=lambda item: item[1], reverse=True)
-        result_lines = [f"Rank {i + 1}. {model_name}: {score}" for i, (model_name, score) in enumerate(sorted_results)]
-        return "\n".join(result_lines)
-
-    def __str__(self) -> str:
-        """Return sorted results as a string (user-friendly)."""
-        return self._format_results()
-
-    def __repr__(self) -> str:
-        """Return sorted results as a string (coder-friendly)."""
-        return self._format_results()
+    def __repr__(self):
+        return self.__str__()
