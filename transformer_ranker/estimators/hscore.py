@@ -13,7 +13,7 @@ class HScore(Estimator):
         Shrinkage-based (regularized) H-Score: https://openreview.net/pdf?id=iz_Wwmfquno
         """
         if regression:
-            warnings.warn("HScore is not suitable for regression tasks.", UserWarning)
+            raise ValueError("HScore is not suitable for regression tasks.")
 
         super().__init__(regression=regression)
 
