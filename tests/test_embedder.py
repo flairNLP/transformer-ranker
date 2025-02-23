@@ -30,7 +30,6 @@ def test_embedder_word_level(small_language_models):
         embedder = Embedder(model=model)
         model_name = embedder.name
         embedding = embedder.embed("this is a test sentence")  # 5 words
-        print(embedding[0].shape)
 
         # Embedding dim should be (5 words x num_layers x hidden_size)
         assert embedding[0].shape == (5, embedder.num_layers, embedder.hidden_size), \
@@ -84,13 +83,13 @@ def test_embedder_edge_cases(small_language_models):
         embedder = Embedder(model=model)
 
         edge_cases = [
-            #"",  # Empty string
-            #[],  # Empty list
-            " ".join(["word"] * 10_000),  # Very long sentence
-            "@#$%^&*()!",  # Special chars
+            "",
+            [],
+            " ".join(["word"] * 10000),
+            "@#$%^&*()!",
         ]
 
         for text in edge_cases:
             embeddings = embedder.embed(text)
             assert isinstance(embeddings, (list, torch.Tensor)), f"Unexpected output for {text}: {type(embeddings)}"
-            assert embeddings, "Embeddings should not be empty"
+

@@ -4,6 +4,7 @@ import torch
 from tokenizers.pre_tokenizers import PreTokenizer, Whitespace
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer, PreTrainedTokenizerFast
+import warnings
 
 
 class Embedder:
@@ -59,7 +60,14 @@ class Embedder:
         unpack_to_cpu: bool = True,
     ) -> list[torch.Tensor]:
         """Prepare texts into batches and embed a dataset."""
-        sentences = [sentences] if isinstance(sentences, str) else sentences
+
+        if isinstance(sentences, str):
+            sentences = [sentences]
+
+        if not any(sentences):
+            warnings.warn("Embedding empty text.")
+            return [torch.empty(0)]
+
         batches = [sentences[i:i + batch_size] for i in range(0, len(sentences), batch_size)]
         progress_bar = tqdm(
             batches,
@@ -77,7 +85,7 @@ class Embedder:
 
     def _embed_batch(self, sentences, unpack_to_cpu: bool = True) -> list[torch.Tensor]:
         """Embeds a batch of texts. Embeddings can be moved to cpu or kept on gpu."""
-        tokenized = self.tokenize(sentences)
+        tokenized = self._tokenize(sentences)
         word_ids = tokenized.pop("word_ids")
 
         # Forward pass to get all hidden states
@@ -131,7 +139,7 @@ class Embedder:
             self.tokenizer.add_special_tokens({"pad_token": "[PAD]"})
             self.model.resize_token_embeddings(len(self.tokenizer))
 
-    def tokenize(self, sentences: Union[list[str], list[list[str]]]) -> dict[str, Any]:
+    def _tokenize(self, sentences: Union[list[str], list[list[str]]]) -> dict[str, Any]:
         """Pre-tokenize and tokenize texts."""
         if self.pre_tokenizer and isinstance(sentences[0], str):
             sentences = [
