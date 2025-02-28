@@ -21,15 +21,15 @@ class Embedder:
         device: Optional[str] = None,
     ):
         """
-        Uses a pre-trained model to generate word or text embeddings,
-        with options for sub-word and sentence pooling.
+        Generates word or text embeddings using a pre-trained model. 
+        Does sub-word and sequence (sentence) pooling.
 
         :param model: Model name or instance.
         :param tokenizer: Tokenizer name or instance.
         :param pre_tokenizer: Pre-tokenizer for text preprocessing.
         :param subword_pooling: Method for pooling sub-words ('mean', 'first', 'last').
         :param sentence_pooling: Method for pooling words into a text embedding.
-        :param layer_ids: Layers to use ('all', or '0, 1, 2, ...').
+        :param layer_ids: Layers to use ('all', or '-1, -2, -3, ...').
         :param layer_mean: Boolean if to average layers.
         :param local_files_only: Load models locally only.
         :param device: Compute device ('cpu', 'cuda:0', 'cuda:1').
@@ -56,8 +56,8 @@ class Embedder:
     def embed(self,
         sentences: Union[str, list[str]],
         batch_size: int = 32,
-        show_progress: bool = True,
         unpack_to_cpu: bool = True,
+        show_progress: bool = True,
     ) -> list[torch.Tensor]:
         """Prepare texts into batches and embed a dataset."""
 
@@ -65,7 +65,7 @@ class Embedder:
             sentences = [sentences]
 
         if not any(sentences):
-            warnings.warn("Embedding empty text.")
+            warnings.warn("Input text is empty, cannot generate embeddings.")
             return [torch.empty(0)]
 
         batches = [sentences[i:i + batch_size] for i in range(0, len(sentences), batch_size)]
@@ -168,16 +168,17 @@ class Embedder:
         return input_dict
 
     def _parse_layer_ids(self, layer_ids: str) -> list[int]:
-        """Parse layer ids from a string."""
+        """Parse layer ids from a string. Convert negative ids, remove duplicates, sort"""
         if layer_ids == "all":
             return list(range(self.num_layers))
-
         layer_ids = [int(number) for number in layer_ids.split(",")]
 
-        if any(layer_id >= self.num_layers or layer_id < 0 for layer_id in layer_ids):
-            raise ValueError(f"Layer indices must be within the range of (0 to {self.num_layers - 1}).")
+        if any(layer_id >= self.num_layers or layer_id < -self.num_layers for layer_id in layer_ids):
+            raise ValueError(f"Layer ids must be within the range of (0 to {self.num_layers - 1}).")
 
-        return layer_ids
+        layer_ids = set(layer_id % self.num_layers for layer_id in layer_ids)
+
+        return sorted(layer_ids)
 
     def _pool_subwords(self, sentence_embedding, sentence_word_ids) -> list[torch.Tensor]:
         """Pool sub-word embeddings into word embeddings. Methods: 'first', 'last', 'mean'."""
@@ -223,7 +224,7 @@ class Embedder:
         if self.sentence_pooling == "mean":
             sentence_embedding = torch.mean(word_embeddings, dim=0)
 
-        # Use last word: for causal LMs like gpt-2
+        # Use last word: for causal LMs like gpt
         if self.sentence_pooling == "last":
             sentence_embedding = word_embeddings[-1]
 

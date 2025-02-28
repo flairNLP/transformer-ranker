@@ -7,7 +7,7 @@ from transformers import AutoModel
 
 @pytest.fixture(scope="session")
 def small_language_models():
-    """Use two small models for fast testing."""
+    """Use two small models for quick testing."""
     return (
         AutoModel.from_pretrained("prajjwal1/bert-tiny"),
         AutoModel.from_pretrained("google/electra-small-discriminator"),

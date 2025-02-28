@@ -16,7 +16,7 @@ def test_merge_text_pairs(sample_dataset):
     cleaner = DatasetCleaner(text_column='text', text_pair_column='text_pair')
     merged = cleaner._merge_text_pairs(sample_dataset, 'text', 'text_pair')
     expected = [f"{text} [SEP] {pair}" for text, pair in zip(sample_dataset['text'], sample_dataset['text_pair'])]
-    assert merged["text+text_pair"] == expected, "Columns are merged incorrectly"
+    assert merged["text_with_text_pair"] == expected, "Columns are merged incorrectly"
 
 
 def test_downsample_ratio(sample_dataset):
@@ -33,13 +33,6 @@ def test_cleanup_rows(sample_dataset):
     assert len(cleaner_up) == 4, "Should've cleaned out the empty text row."
 
 
-def test_tokenization(sample_dataset):
-    """Optional but also worth testing. Tokenize when preprocessing"""
-    cleaner = DatasetCleaner(tokenize=True)
-    words = cleaner._whitespace_tokenize(sample_dataset, 'text')
-    assert all(isinstance(text, list) for text in words['text']), "Each text should now be a list of words."
-
-
 @pytest.mark.parametrize("task_type,dataset_name,downsample_ratio", [
     ("token classification", "conll2003", 0.01),
     ("token classification", "wnut_17", 0.05),
@@ -50,7 +43,7 @@ def test_tokenization(sample_dataset):
     ("text classification", "SetFit/rte", 0.05),
 ])
 def test_datacleaner_functionality(task_type, dataset_name, downsample_ratio):
-    """Load different datasets test preprocessed texts, labels and task category"""
+    """Load various datasets and check datacleaner outputs"""
     dataset = load_dataset(dataset_name, trust_remote_code=True)
     cleaner = DatasetCleaner(dataset_downsample=downsample_ratio)
     texts, labels, task_category = cleaner.prepare_dataset(dataset)

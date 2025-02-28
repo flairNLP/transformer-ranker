@@ -6,7 +6,6 @@ from typing import Optional, Union
 import datasets
 import torch
 from datasets.dataset_dict import Dataset, DatasetDict
-from tokenizers.pre_tokenizers import Whitespace
 
 from .utils import configure_logger
 
@@ -15,13 +14,10 @@ logger = configure_logger("transformer_ranker", logging.INFO)
 
 class TaskCategory(str, Enum):
     """Supported task categories"""
-
     TOKEN_CLASSIFICATION = "token classification"
     TEXT_CLASSIFICATION = "text classification"
+    TEXT_PAIR_CLASSIFICATION = "text pair classification"
     TEXT_REGRESSION = "text regression"
-
-    def __str__(self):
-        return self.value
 
 
 @dataclass
@@ -50,23 +46,20 @@ class DatasetCleaner:
         if not isinstance(dataset, (Dataset, DatasetDict)):
             raise ValueError(f"Unsupported dataset type: {type(dataset)}")
 
-        # Merge dataset splits into one
+        # Merge splits into one
         if isinstance(dataset, DatasetDict):
             dataset = datasets.concatenate_datasets(list(dataset.values()))
 
-        # Find or set the text field
+        # Find text and label fields, set the task category
         text_column = self.text_column if self.text_column else self._find_column(dataset, "text column")
-
-        # Find or set the label field
         label_column = self.label_column if self.label_column else self._find_column(dataset, "label column")
-
-        # Find or set the task_category
         task_category = self.task_category if self.task_category else self._find_task_category(dataset, label_column)
 
-        # Combine text pair columns with a separator token
+        # Merge text pair columns using a separator
         if self.text_pair_column:
+            task_category = TaskCategory.TEXT_PAIR_CLASSIFICATION
             dataset = self._merge_text_pairs(dataset, text_column, self.text_pair_column)
-            text_column = f"{text_column}+{self.text_pair_column}"
+            text_column = f"{text_column}_with_{self.text_pair_column}"
 
         # Remove unused columns
         dataset = dataset.select_columns([text_column, label_column])
@@ -79,23 +72,17 @@ class DatasetCleaner:
         if self.cleanup_rows:
             dataset = self._cleanup_rows(dataset, text_column, label_column)
 
-        # Optional pre-tokenization
-        if self.tokenize and isinstance(dataset[text_column][0], str):
-            dataset = self._whitespace_tokenize(dataset, text_column)
-
         # Set or create label map for classification tasks
         label_map = self.label_map
-        if task_category in (TaskCategory.TOKEN_CLASSIFICATION, TaskCategory.TEXT_CLASSIFICATION):
+        if "classification" in task_category:
             dataset, label_map = (dataset, label_map) if label_map else self._create_label_map(dataset, label_column)
 
             # Remove BIO encoding for token classification
             if task_category == TaskCategory.TOKEN_CLASSIFICATION and self.remove_bio_encoding:
                 dataset, label_map = self._remove_bio_encoding(dataset, label_column, label_map)
 
-        # Prepare all texts
+        # Prepare all texts and labels as tensors
         texts = dataset[text_column]
-
-        # Prepare all labels as a tensor
         labels = dataset[label_column]
         if task_category == TaskCategory.TOKEN_CLASSIFICATION:
             labels = [word_label for labels in dataset[label_column] for word_label in labels]
@@ -132,7 +119,7 @@ class DatasetCleaner:
         if found_column is None:
             raise ValueError(
                 f"{column_role} not found in dataset: {dataset.column_names}. "
-                f"Specify it manually text_column: str = ..."
+                f"Set the text_column: str = ... manually."
             )
 
         return found_column
@@ -147,11 +134,11 @@ class DatasetCleaner:
             )
 
         dataset = dataset.map(
-            lambda dataset_row: {text_column: dataset_row[text_column] + " [SEP] " + dataset_row[text_pair_column]},
+            lambda row: {text_column: row[text_column] + " [SEP] " + row[text_pair_column]},
             desc="Merging text pair columns",
         )
 
-        new_text_column_name = text_column + "+" + text_pair_column
+        new_text_column_name = text_column + "_with_" + text_pair_column
         dataset = dataset.rename_column(text_column, new_text_column_name)
         return dataset
 
@@ -291,30 +278,15 @@ class DatasetCleaner:
         return dataset, new_label_map
 
     @staticmethod
-    def _whitespace_tokenize(dataset: Dataset, text_column: str) -> Dataset:
-        """Tokenize using Whitespace"""
-        tokenizer = Whitespace()
-
-        def pre_tokenize(example):
-            encoding = tokenizer.pre_tokenize_str(example[text_column])
-            example[text_column] = [token for token, _ in encoding]
-            return example
-
-        dataset = dataset.map(pre_tokenize, num_proc=None, desc="Whitespace pre-tokenization")
-        return dataset
-
-    @staticmethod
     def _log_dataset_info(text_column, label_column, label_map, task_category, downsample_ratio, dataset_size) -> None:
         """Log information about preprocessed dataset"""
-        # Some details about dataset
         logger.info(
-            f"Dataset Info - Text Column: {text_column}, Label Column: {label_column}, "
-            f"Task Category: {task_category}, Dataset Size: {dataset_size} texts"
+            f"Dataset Info - Text Column: {text_column}, Label Column: {label_column}, Task Category: {task_category}."
         )
 
         # Show dataset size
         if downsample_ratio and downsample_ratio < 1.0:
-            logger.info(f"Dataset has been downsampled to {int(downsample_ratio * 100)}% of original size.")
+            logger.info(f"Dataset size: {dataset_size} texts, reduced to {int(downsample_ratio * 100)}% of original.")
 
         # And the label map
         if task_category != TaskCategory.TEXT_REGRESSION:
