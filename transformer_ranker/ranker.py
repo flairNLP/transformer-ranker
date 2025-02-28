@@ -23,7 +23,7 @@ class TransformerRanker:
         **kwargs: Any,
     ):
         """
-        Processes a dataset and prepares a list of metrics to evaluate transferability.
+        Prepare a dataset and compile metrics to assess transferability.
 
         :param dataset: a dataset from huggingface with texts and labels.
         :param dataset_downsample: a fraction to which the dataset should be reduced.
@@ -60,9 +60,9 @@ class TransformerRanker:
         Loads models, collects embeddings, and scores them using transferability metrics.
 
         :param models: A list of model names
-        :param batch_size: The number of samples to process in each batch, defaults to 32.
         :param estimator: Transferability metric ('hscore', 'logme', 'knn').
         :param layer_aggregator: Method to aggregate layers ('lastlayer', 'layermean', 'bestlayer').
+        :param batch_size: The number of samples to process in each batch, defaults to 32.
         :param device: Device for embedding, defaults to GPU if available ('cpu', 'cuda', 'cuda:2').
         :param gpu_estimation: Store and score embeddings on GPU for speedup.
         :param kwargs: Additional parameters for the embedder class (device, sentence_pooling, etc.)
@@ -70,8 +70,11 @@ class TransformerRanker:
         """
         self._confirm_ranker_setup(estimator=estimator, layer_aggregator=layer_aggregator)
 
+        # Set device for models and the metric
         device = kwargs.pop("device", None)
         gpu_estimation = kwargs.get("gpu_estimation", True)
+        if gpu_estimation:
+            self.labels = self.labels.to(device)
 
         # Download models to hf cache
         self._preload_models(models=models, device=device)
@@ -80,14 +83,12 @@ class TransformerRanker:
         regression = self.task_category == TaskCategory.TEXT_REGRESSION
         metric = self.transferability_metrics[estimator](regression=regression)
 
-        if gpu_estimation:  # set device for the metric
-            self.labels = self.labels.to(device)
-
         result = Result(metric=estimator)
 
         for model in models:
             effective_sentence_pooling = (
-                None if self.task_category == TaskCategory.TOKEN_CLASSIFICATION else kwargs.get("sentence_pooling", "mean")
+                None if self.task_category == TaskCategory.TOKEN_CLASSIFICATION 
+                else kwargs.get("sentence_pooling", "mean")
             )
 
             # Setup the embedder
@@ -101,15 +102,15 @@ class TransformerRanker:
             )
 
             # Collect embeddings
+            model_name = embedder.name
             embeddings = embedder.embed(
-                self.texts, batch_size=batch_size, show_progress=True, unpack_to_cpu=not gpu_estimation
+                self.texts, batch_size=batch_size, unpack_to_cpu=not gpu_estimation, show_progress=True,
             )
 
             # Flatten them for ner tasks
             if self.task_category == TaskCategory.TOKEN_CLASSIFICATION:
                 embeddings = [word for sentence in embeddings for word in sentence]
 
-            model_name = embedder.name
             del embedder  # remove from memory
             torch.cuda.empty_cache()
 
@@ -117,15 +118,15 @@ class TransformerRanker:
             score = self._transferability_score(embeddings, metric, layer_aggregator)
 
             # Store and log results
-            result[model_name] = score
-            logger.info(f"{model_name}, {result.metric}: {result[model_name]:.2f}")
+            result.add_score(model_name, score)
+            logger.info(f"{model_name} {estimator}: {score:.2f}")
 
         return result
 
-    def _transferability_score(self, embeddings, metric, layer_aggregator, show_progress=True):
-        """Compute transferability for model embeddings."""
+    def _transferability_score(self, embeddings, metric, layer_aggregator, show_progress=True) -> float:
+        """Compute transferability for a model."""
         tqdm_bar_format = "{l_bar}{bar:10}{r_bar}{bar:-10b}"
-        num_layers, scores_per_layer = len(embeddings[0]), []  # lastlayer and layermean will dave dim 1
+        num_layers, scores_per_layer = len(embeddings[0]), []
 
         transferability_progress = tqdm(
             range(num_layers), desc="Transferability score", bar_format=tqdm_bar_format, disable=not show_progress
@@ -137,16 +138,14 @@ class TransformerRanker:
             score = metric.fit(embeddings=layer_embeddings, labels=self.labels)
             scores_per_layer.append(score)
 
-        # Aggregate scores
-        if layer_aggregator == "bestlayer":
-            return max(scores_per_layer)
-        elif layer_aggregator == "layermean":
-            return sum(scores_per_layer) / len(scores_per_layer)
-        else:
-            return scores_per_layer[0]  # score of the last hidden state score.
+        aggregated_score = (
+            max(scores_per_layer) if layer_aggregator == "bestlayer" else scores_per_layer[-1]
+        )
+
+        return aggregated_score
 
     def _preload_models(self, models: list[str], device: Optional[str] = None) -> None:
-        """Load models to HuggingFace cache, optimized to avoid redundant loads."""
+        """Load models to HuggingFace cache if not already present."""
         cached_models, downloaded_models = set(), set()
 
         for model in models:
@@ -166,7 +165,7 @@ class TransformerRanker:
                 Embedder(model, device=device)
 
     def _confirm_ranker_setup(self, estimator: str, layer_aggregator: str) -> None:
-        """Confirm main parameters in the run method"""
+        """Validate main parameters in the run method"""
         available_metrics = self.transferability_metrics.keys()
         if estimator not in available_metrics:
             raise ValueError(

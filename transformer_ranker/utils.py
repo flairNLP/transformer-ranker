@@ -95,44 +95,37 @@ class Result:
 
     def __init__(self, metric: str):
         self.metric = metric
-        self._scores = {}
-        self._layer_scores = {}
+        self.scores = {}
+        self.layer_scores = {}
 
-    def score_summary(self):
-        """Sort scores and print them with rankings."""
-        if not self._scores:
-            return "No scores available."
+    def add_score(self, model_name: str, score: float, layer_scores: list[float] = None) -> None:
+        """Add score for a model."""
+        self.scores[model_name] = score
 
-        sorted_scores = sorted(self._scores.items(), key=lambda item: item[1], reverse=True)
-        model_rank = [f"Rank {i+1}. {model}: {score:.2f}" for i, (model, score) in enumerate(sorted_scores)]
-        return "\n".join(model_rank)
+        if layer_scores is not None:  # only used for the bestlayer option
+            self.layer_scores[model_name] = layer_scores
 
     def append(self, other: "Result") -> None:
-        """Allow to run rankings multiple times and append results"""
+        """Append scores from multiple runs."""
         if self.metric != other.metric:
-            raise ValueError(f"Metrics do not match ({self.metric} and {other.metric})! Run the ranking using the same metric.")
-
-        self._scores.update(other._scores)
-        self._layer_scores.update(other._layer_scores)
+            raise ValueError(f"Metrics do not match ({self.metric} vs {other.metric}).")
+        self.scores.update(other.scores)
+        self.layer_scores.update(other.layer_scores)
 
     def best_model(self) -> str:
-        """Show the model with the highest transferability score"""
-        if not self._scores:
-            return None
-        return max(self._scores, key=self._scores.get)
+        """Show the model with the highest score."""
+        if not self.scores:
+            return ""
+        return max(self.scores, key=self.scores.get)
 
-    @property
-    def layer_scores(self):
-        return self._layer_scores
+    def __str__(self) -> str:
+        """Sort scores and print them with rankings."""
+        if not self.scores:
+            return "No scores available."
 
-    def __getitem__(self, model_name: str):
-        return self._scores.get(model_name)
-
-    def __setitem__(self, model_name: str, score: float):
-        self._scores[model_name] = score
-
-    def __str__(self):
-        return self.score_summary()
-
-    def __repr__(self):
+        sorted_scores = sorted(self.scores.items(), key=lambda item: item[1], reverse=True)
+        model_rank = [f"Rank {i+1}. {model}: {score:.2f}" for i, (model, score) in enumerate(sorted_scores)]
+        return "\n".join(model_rank)
+    
+    def __repr__(self) -> str:
         return self.__str__()
