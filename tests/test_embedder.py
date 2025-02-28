@@ -82,8 +82,6 @@ def test_embedder_edge_cases(small_language_models):
             "",
             [],
             "🍕",
-            # "\n",
-            # "\n \t",
             "1234567890",
             " ".join(["word"] * 10000),
             "@#$%^&*()!",

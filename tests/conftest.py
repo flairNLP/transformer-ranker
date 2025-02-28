@@ -7,7 +7,7 @@ from transformers import AutoModel
 
 @pytest.fixture(scope="session")
 def small_language_models():
-    """Use two small models for quick testing."""
+    """Use two small models for quick testing"""
     return (
         AutoModel.from_pretrained("prajjwal1/bert-tiny"),
         AutoModel.from_pretrained("google/electra-small-discriminator"),
@@ -16,11 +16,11 @@ def small_language_models():
 
 @pytest.fixture(scope="session")
 def sample_dataset():
-    """One dummy custom dataset."""
+    """One dummy custom dataset"""
     return Dataset.from_dict(
         {
             "text": ["whatsup", "quick", "", "datasets", "test"],
-            "text_pair": ["Python programming", "loading", "student", "humboldt", "focus"],
+            "text_pair": ["Papers", "with", "code", "humboldt", "focus"],
             "label": [1, 0, 2, 1, 2],
             "extra": [100, 200, 300, 400, 500],
         }
@@ -29,7 +29,7 @@ def sample_dataset():
 
 @pytest.fixture(scope="session")
 def conll():
-    """Ner dataset, load once and keep."""
+    """Ner dataset, load once and keep"""
     return load_dataset("conll2003")
 
 
@@ -53,7 +53,7 @@ def sick():
 
 @pytest.fixture(scope="session")
 def stsb():
-    """Sts has floats as labels (regression)"""
+    """Sts-b has floats as labels (regression)"""
     return load_dataset("glue", "stsb")
 
 

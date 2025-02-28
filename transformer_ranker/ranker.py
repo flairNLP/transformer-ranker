@@ -102,7 +102,6 @@ class TransformerRanker:
             )
 
             # Collect embeddings
-            model_name = embedder.name
             embeddings = embedder.embed(
                 self.texts, batch_size=batch_size, unpack_to_cpu=not gpu_estimation, show_progress=True,
             )
@@ -111,6 +110,7 @@ class TransformerRanker:
             if self.task_category == TaskCategory.TOKEN_CLASSIFICATION:
                 embeddings = [word for sentence in embeddings for word in sentence]
 
+            model_name = embedder.name
             del embedder  # remove from memory
             torch.cuda.empty_cache()
 
@@ -124,7 +124,7 @@ class TransformerRanker:
         return result
 
     def _transferability_score(self, embeddings, metric, layer_aggregator, show_progress=True) -> float:
-        """Compute transferability for a model."""
+        """Compute transferability for a model"""
         tqdm_bar_format = "{l_bar}{bar:10}{r_bar}{bar:-10b}"
         num_layers, scores_per_layer = len(embeddings[0]), []
 
@@ -145,7 +145,7 @@ class TransformerRanker:
         return aggregated_score
 
     def _preload_models(self, models: list[str], device: Optional[str] = None) -> None:
-        """Load models to HuggingFace cache if not already present."""
+        """Load models to HuggingFace cache if not already present"""
         cached_models, downloaded_models = set(), set()
 
         for model in models:
