@@ -1,10 +1,10 @@
-from typing import Optional, Union, Any
+import warnings
+from typing import Any, Optional, Union
 
 import torch
 from tokenizers.pre_tokenizers import PreTokenizer, Whitespace
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer, PreTrainedTokenizerFast
-import warnings
 
 
 class Embedder:
@@ -53,13 +53,14 @@ class Embedder:
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model = self.model.to(self.device)
 
-    def embed(self,
+    def embed(
+        self,
         sentences: Union[str, list[str]],
         batch_size: int = 32,
         unpack_to_cpu: bool = True,
         show_progress: bool = True,
     ) -> list[torch.Tensor]:
-        """Prepare texts into batches and embed a dataset."""
+        """Prepares texts into batches and embeds a dataset."""
 
         if isinstance(sentences, str):
             sentences = [sentences]
@@ -68,12 +69,12 @@ class Embedder:
             warnings.warn("Input text is empty, cannot generate embeddings.")
             return [torch.empty(0)]
 
-        batches = [sentences[i:i + batch_size] for i in range(0, len(sentences), batch_size)]
+        batches = [sentences[i : i + batch_size] for i in range(0, len(sentences), batch_size)]
         progress_bar = tqdm(
             batches,
-            desc="Extracting embeddings",
+            desc="Generating embeddings",
             disable=not show_progress,
-            bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}"
+            bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}",
         )
 
         embeddings = []
@@ -105,9 +106,9 @@ class Embedder:
             embeddings = torch.mean(embeddings, dim=2, keepdim=True)
 
         sentence_embeddings = []
-        for subword_embeddings, word_ids in zip(embeddings, word_ids):
+        for subword_embeddings, ids in zip(embeddings, word_ids):
             # Pool sub-words to get word embeddings
-            word_embeddings = self._pool_subwords(subword_embeddings, word_ids)
+            word_embeddings = self._pool_subwords(subword_embeddings, ids)
 
             # Pool words to get text embedding
             sentence_embedding = self._pool_words(word_embeddings) if self.sentence_pooling else word_embeddings
@@ -132,7 +133,7 @@ class Embedder:
         self.tokenizer = (
             tokenizer
             if isinstance(tokenizer, PreTrainedTokenizerFast)
-            else AutoTokenizer.from_pretrained(tokenizer or self.name)
+            else AutoTokenizer.from_pretrained(tokenizer or self.name, add_prefix_space=True)
         )
 
         if self.tokenizer.pad_token is None:
@@ -145,9 +146,8 @@ class Embedder:
             sentences = [
                 [word for word, _ in self.pre_tokenizer.pre_tokenize_str(sentence)]
                 for sentence in sentences
-            ]
+            ]  # fmt: skip
 
-        # Handle tokenizers with wrong model_max_length in configuration
         max_length = self.tokenizer.model_max_length
         max_length = max_length if max_length < 1000000 else 512
         is_split_into_words = not isinstance(sentences[0], str)
@@ -161,10 +161,9 @@ class Embedder:
             is_split_into_words=is_split_into_words,
         )
 
-        # Move to device and prepare word_ids for sub-words
+        # Move inputs to device and prepare word_ids for sub-words
         input_dict = {k: v.to(self.device) for k, v in tokenized.items()}
         input_dict["word_ids"] = [tokenized.word_ids(i) for i in range(len(sentences))]
-
         return input_dict
 
     def _parse_layer_ids(self, layer_ids: str) -> list[int]:
@@ -177,7 +176,6 @@ class Embedder:
             raise ValueError(f"Layer ids must be within the range of (0 to {self.num_layers - 1}).")
 
         layer_ids = set(layer_id % self.num_layers for layer_id in layer_ids)
-
         return sorted(layer_ids)
 
     def _pool_subwords(self, sentence_embedding, sentence_word_ids) -> list[torch.Tensor]:
