@@ -30,31 +30,31 @@ def sample_dataset():
 @pytest.fixture(scope="session")
 def conll():
     """Ner dataset, load once and keep"""
-    return load_dataset("conll2003")
+    return load_dataset("conll2003", trust_remote_code=True)
 
 
 @pytest.fixture(scope="session")
 def wnut():
     """One more ner dataset"""
-    return load_dataset("wnut_17")
+    return load_dataset("wnut_17", trust_remote_code=True)
 
 
 @pytest.fixture(scope="session")
 def trec():
     """One text classification"""
-    return load_dataset("trec")
+    return load_dataset("trec", trust_remote_code=True)
 
 
 @pytest.fixture(scope="session")
 def sick():
     """Sick has text pairs"""
-    return load_dataset("yangwang825/sick")
+    return load_dataset("yangwang825/sick", trust_remote_code=True)
 
 
 @pytest.fixture(scope="session")
 def stsb():
     """Sts-b has floats as labels (regression)"""
-    return load_dataset("glue", "stsb")
+    return load_dataset("glue", "stsb", trust_remote_code=True)
 
 
 @pytest.fixture(scope="session")

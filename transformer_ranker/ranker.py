@@ -23,12 +23,12 @@ class TransformerRanker:
         **kwargs: Any,
     ):
         """
-        Prepare a dataset and compile metrics to assess transferability.
+        Prepares a dataset and compiles metrics to assess transferability.
 
         :param dataset: a dataset from huggingface with texts and labels.
         :param dataset_downsample: a fraction to which the dataset should be reduced.
-        :param text_column: the name of the column containing text data.
-        :param label_column: the name of the column containing label data.
+        :param text_column: the name of the column containing texts.
+        :param label_column: the name of the column containing labels.
         :param kwargs: additional dataset-specific parameters for data cleaning.
         """
         # Preprocess and down-sample a dataset
@@ -57,16 +57,16 @@ class TransformerRanker:
         **kwargs: Any,
     ):
         """
-        Loads models, collects embeddings, and scores them using transferability metrics.
+        Loads models, collects embeddings, and scores them.
 
         :param models: A list of model names
         :param estimator: Transferability metric ('hscore', 'logme', 'knn').
         :param layer_aggregator: Method to aggregate layers ('lastlayer', 'layermean', 'bestlayer').
-        :param batch_size: The number of samples to process in each batch, defaults to 32.
-        :param device: Device for embedding, defaults to GPU if available ('cpu', 'cuda', 'cuda:2').
+        :param batch_size: Number of samples per batch, defaults to 32.
+        :param device: Device for embedding ('cpu', 'cuda', 'cuda:2').
         :param gpu_estimation: Store and score embeddings on GPU for speedup.
-        :param kwargs: Additional parameters for the embedder class (device, sentence_pooling, etc.)
-        :return: Returns the sorted dictionary of model names and their scores
+        :param kwargs: Additional parameters for embedder class.
+        :return: Returns sorted dictionary of model names and their scores
         """
         self._confirm_ranker_setup(estimator=estimator, layer_aggregator=layer_aggregator)
 
@@ -82,12 +82,12 @@ class TransformerRanker:
         # Set transferability metric
         regression = self.task_category == TaskCategory.TEXT_REGRESSION
         metric = self.transferability_metrics[estimator](regression=regression)
-
         result = Result(metric=estimator)
 
         for model in models:
             effective_sentence_pooling = (
-                None if self.task_category == TaskCategory.TOKEN_CLASSIFICATION 
+                None
+                if self.task_category == TaskCategory.TOKEN_CLASSIFICATION
                 else kwargs.get("sentence_pooling", "mean")
             )
 
@@ -104,7 +104,7 @@ class TransformerRanker:
             # Collect embeddings
             embeddings = embedder.embed(
                 self.texts, batch_size=batch_size, unpack_to_cpu=not gpu_estimation, show_progress=True,
-            )
+            )  # fmt: skip
 
             # Flatten them for ner tasks
             if self.task_category == TaskCategory.TOKEN_CLASSIFICATION:
@@ -140,7 +140,7 @@ class TransformerRanker:
 
         aggregated_score = (
             max(scores_per_layer) if layer_aggregator == "bestlayer" else scores_per_layer[-1]
-        )
+        )  # fmt :skip
 
         return aggregated_score
 
@@ -168,9 +168,7 @@ class TransformerRanker:
         """Validate main parameters in the run method"""
         available_metrics = self.transferability_metrics.keys()
         if estimator not in available_metrics:
-            raise ValueError(
-                f"Unsupported metric '{estimator}'. Valid options: {', '.join(available_metrics)}"
-            )
+            raise ValueError(f"Unsupported metric '{estimator}'. Valid options: {', '.join(available_metrics)}")
 
         available_layer_pooling = {"layermean", "lastlayer", "bestlayer"}
         if layer_aggregator not in available_layer_pooling:
