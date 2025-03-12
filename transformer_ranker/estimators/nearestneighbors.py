@@ -77,7 +77,7 @@ class NearestNeighbors(Estimator):
             else:
                 f1 = MulticlassF1Score(average="micro", num_classes=num_classes)
 
-            score = f1(y_pred, labels).item()
+            score = f1(y_pred.to("cpu"), labels.to("cpu")).item()
 
         self.score = score
         return score
