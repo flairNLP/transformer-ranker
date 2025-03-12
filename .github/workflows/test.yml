@@ -17,8 +17,8 @@ on:
     - "LICENSE"
 
 jobs:
-  run:
-    name: "Run Tests"
+  test:
+    name: Run Tests
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -26,30 +26,19 @@ jobs:
         python-version: ["3.9"]
 
     steps:
-    - name: Checkout the repository
-      uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      id: setup-python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
 
-    - uses: "actions/cache@v4"
-      id: "restore-cache"
-      with:
-        key: "venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}"
-        path: .venv/
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel pytest
+          pip install -r requirements.txt
 
-    - name: "Create a virtual environment"
-      if: "steps.restore-cache.outputs.cache-hit == false"
-      run: |
-        python -m venv .venv
-        .venv/bin/python -m pip install --upgrade pip setuptools wheel pytest
-        .venv/bin/python -m pip install -r requirements.txt
-
-    - name: Print Package Versions
-      run: .venv/bin/python -m pip freeze
-
-    - name: Run pytest
-      run: .venv/bin/python -m pytest
+      - name: Run tests
+        run: pytest
