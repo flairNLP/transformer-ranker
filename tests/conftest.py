@@ -1,13 +1,11 @@
 import pytest
-import torch
 from datasets import Dataset, load_dataset
-from sklearn import datasets
 from transformers import AutoModel
 
 
 @pytest.fixture(scope="session")
 def small_language_models():
-    """Use two small models for quick testing"""
+    """Use two small models for testing"""
     return (
         AutoModel.from_pretrained("prajjwal1/bert-tiny"),
         AutoModel.from_pretrained("google/electra-small-discriminator"),
@@ -15,8 +13,8 @@ def small_language_models():
 
 
 @pytest.fixture(scope="session")
-def sample_dataset():
-    """One dummy custom dataset"""
+def custom_dataset():
+    """One a custom dataset"""
     return Dataset.from_dict(
         {
             "text": ["whatsup", "quick", "", "datasets", "test"],
@@ -55,11 +53,3 @@ def sick():
 def stsb():
     """Sts-b has floats as labels (regression)"""
     return load_dataset("glue", "stsb", trust_remote_code=True)
-
-
-@pytest.fixture(scope="session")
-def iris_dataset():
-    iris = datasets.load_iris()
-    data = torch.tensor(iris["data"], dtype=torch.float32)
-    data[142] += torch.tensor([0, 0, 0, 0.01])  # Ensure no exact duplicates
-    return {"data": data, "target": torch.tensor(iris["target"], dtype=torch.float32)}
