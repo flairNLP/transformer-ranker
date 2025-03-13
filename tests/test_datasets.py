@@ -5,32 +5,32 @@ from datasets import load_dataset
 from transformer_ranker.datacleaner import DatasetCleaner
 
 
-def test_find_columns(sample_dataset):
+def test_find_columns(custom_dataset):
     """Test text and label column names"""
     cleaner = DatasetCleaner()
-    assert cleaner._find_column(sample_dataset, "text column") == "text", "Column name for texts not found"
-    assert cleaner._find_column(sample_dataset, "label column") == "label", "Column name for labels not found"
+    assert cleaner._find_column(custom_dataset, "text column") == "text", "Column name for texts not found"
+    assert cleaner._find_column(custom_dataset, "label column") == "label", "Column name for labels not found"
 
 
-def test_merge_text_pairs(sample_dataset):
+def test_merge_text_pairs(custom_dataset):
     """Test merging text pair columns"""
     cleaner = DatasetCleaner(text_column="text", text_pair_column="text_pair")
-    dataset = cleaner._merge_text_pairs(sample_dataset, "text", "text_pair")
-    expected = [f"{text} [SEP] {pair}" for text, pair in zip(sample_dataset["text"], sample_dataset["text_pair"])]
+    dataset = cleaner._merge_text_pairs(custom_dataset, "text", "text_pair")
+    expected = [f"{text} [SEP] {pair}" for text, pair in zip(custom_dataset["text"], custom_dataset["text_pair"])]
     assert dataset["text_with_text_pair"] == expected, "Columns are merged incorrectly"
 
 
-def test_downsample_ratio(sample_dataset):
+def test_downsample_ratio(custom_dataset):
     """Test size after downsampling"""
     cleaner = DatasetCleaner(dataset_downsample=0.5)
-    dataset = cleaner._downsample(sample_dataset, 0.5)
+    dataset = cleaner._downsample(custom_dataset, 0.5)
     assert len(dataset) == 2, "Issues with downsampling"
 
 
-def test_cleanup_rows(sample_dataset):
+def test_cleanup_rows(custom_dataset):
     """Test removing empty rows"""
     cleaner = DatasetCleaner()
-    dataset = cleaner._cleanup_rows(sample_dataset, "text", "label")
+    dataset = cleaner._cleanup_rows(custom_dataset, "text", "label")
     assert len(dataset) == 4, "Empty texts should've been removed"
 
 
@@ -72,7 +72,7 @@ def test_bio_decoding(conll):
         ("text classification", "SetFit/rte", 0.05),
     ],
 )
-def test_datacleaner_functionality(task_type, dataset_name, downsample_ratio):
+def test_different_datasets(task_type, dataset_name, downsample_ratio):
     """Load various datasets and check datacleaner outputs"""
     dataset = load_dataset(dataset_name, trust_remote_code=True)
     cleaner = DatasetCleaner(dataset_downsample=downsample_ratio)
