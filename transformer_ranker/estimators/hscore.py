@@ -1,5 +1,3 @@
-import warnings
-
 import torch
 
 from .base import Estimator
@@ -8,7 +6,7 @@ from .base import Estimator
 class HScore(Estimator):
     def __init__(self, regression: bool = False):
         """
-        Regularized H-Score estimator.
+        Regularized H-Score
         Paper: https://arxiv.org/abs/2212.10082
         Shrinkage-based (regularized) H-Score: https://openreview.net/pdf?id=iz_Wwmfquno
         """
@@ -19,9 +17,9 @@ class HScore(Estimator):
 
     def fit(self, embeddings: torch.Tensor, labels: torch.Tensor, **kwargs) -> float:
         """
-        H-score intuition: higher variance between embeddings of different classes
-        (mean vectors for each class) and lower feature redundancy (i.e. inverse of the covariance
-        matrix for all data points) lead to better transferability.
+        H-score intuition: higher inter-class variance (the variance between mean vectors for each class)
+        and small feature redundancy (inverse of the covariance matrix for all data points)
+        result in better transferability.
 
         :param embeddings: Embedding tensor (num_samples, hidden_size)
         :param labels: Label tensor (num_samples,)
@@ -31,7 +29,6 @@ class HScore(Estimator):
         embeddings = embeddings.to(torch.float64)
         embeddings = embeddings - embeddings.mean(dim=0, keepdim=True)
 
-        # Number of samples, hidden size (i.e. embedding length), number of classes
         num_samples, hidden_size = embeddings.size()
         classes, _ = torch.unique(labels, return_counts=True)
         num_classes = len(classes)
@@ -49,7 +46,7 @@ class HScore(Estimator):
         delta = delta_ - 2.0 * mean_cov * emp_cov_trace.sum() + hidden_size * mean_cov**2
         delta /= hidden_size
 
-        # Apply Ledoit-Wolf shrinkage to the feature covariance matrix
+        # Apply shrinkage to the feature covariance matrix
         shrinkage = torch.clamp(beta / delta, 0, 1)
         identity_matrix = torch.eye(embeddings.size(1), device=embeddings.device)
         covf_alpha = (1 - shrinkage) * cov_matrix + shrinkage * mean_cov * identity_matrix
@@ -57,14 +54,14 @@ class HScore(Estimator):
         # Pseudo-inverse of the feature covariance matrix
         pinv_covf_alpha = torch.linalg.pinv(covf_alpha, rcond=1e-15)
 
-        # Matrix of class-conditioned means
+        # Mean vectors for each class
         class_means = torch.zeros(num_classes, hidden_size, dtype=torch.float64, device=embeddings.device)
         for i, cls in enumerate(classes):
             mask = labels == cls
-            class_features = embeddings[mask].mean(dim=0)
-            class_means[i] = class_features * torch.sqrt(mask.sum())
+            class_embeddings = embeddings[mask].mean(dim=0)
+            class_means[i] = class_embeddings * torch.sqrt(mask.sum())
 
-        # Covariance for class-conditioned means
+        # Covariance for class means
         covg = torch.mm(class_means.T, class_means) / (num_samples - 1)
 
         # Shrinkage-based H-score

@@ -6,7 +6,7 @@ from .base import Estimator
 class LogME(Estimator):
     def __init__(self, regression: bool = False):
         """
-        LogME (Log of Maximum Evidence) estimator.
+        Log of Maximum Evidence
         Paper: https://arxiv.org/abs/2102.11005
         """
         super().__init__(regression=regression)
@@ -35,57 +35,45 @@ class LogME(Estimator):
         :return: LogME score
         """
         embeddings = embeddings.to(torch.float64)
-        labels = labels.to(torch.float64).unsqueeze(-1) if self.regression and labels.dim() == 1 else labels
+        labels = labels.to(torch.float64)
 
-        # Get the number of samples, number of classes, and the hidden size
         num_samples, hidden_size = embeddings.shape
-        class_names, _ = torch.unique(labels, return_counts=True)
-        num_classes = labels.shape[1] if self.regression else len(class_names)
+        class_names = torch.unique(labels) if not self.regression else None
+        num_classes = len(class_names) if not self.regression else 1
 
-        # SVD on the features
-        u, singular_values, _ = torch.linalg.svd(embeddings, full_matrices=False)
+        # Decompose embeddings via SVD
+        u, s, _ = torch.linalg.svd(embeddings, full_matrices=False)
+        sigma = (s**2).unsqueeze(-1)
 
-        # Compute sigma which is the square of singular values
-        sigma = singular_values.reshape(-1, 1) ** 2
-
+        alpha, beta = torch.tensor(initial_alpha), torch.tensor(initial_beta)
         evidence_sum = 0.0
 
-        # Start with initial alpha and beta values
-        alpha, beta = torch.tensor(initial_alpha), torch.tensor(initial_beta)
-
-        # Loop over each class (for classification) or each target column (for regression)
         for i in range(num_classes):
-            # Use one-hot vectors for classification and label columns for regression
-            labels_ = labels[:, i] if self.regression else (labels == class_names[i]).to(torch.float64)
-            labels_ = labels_.unsqueeze(-1)
+            # Use one-hot vectors for classification
+            labels_ = labels if self.regression else (labels == class_names[i]).to(dtype=torch.float64)
+            labels_ = labels_.unsqueeze(-1).to(embeddings.device)
 
-            # Project labels onto the singular vectors (x)
-            projected_labels = u.T @ labels_
-            projected_labels_squared = projected_labels**2
-
-            # Residual sum of squares; if k < hidden_size, sum xi for zero singular values
-            residual_sum_squares = (labels_**2).sum() - projected_labels_squared.sum()
+            # Project labels to singular vectors (x)
+            projected_labels = (u.T @ labels_) ** 2
+            residual_sum_squares = (labels_**2).sum() - projected_labels.sum()
 
             residual_error = torch.tensor(0.0)
             precision_weighted_sum = torch.tensor(0.0)
 
-            # Iteratively update alpha and beta until convergence or maximum iterations
+            # Iteratively update alpha and beta until convergence or max_iter
             for _ in range(max_iter):
-                tau = alpha / beta  # Alpha-to-beta ratio, representing noise-to-signal
+                tau = alpha / beta
                 gamma = (sigma / (sigma + tau)).sum()
-                precision_weighted_sum = (sigma * projected_labels_squared / ((tau + sigma) ** 2)).sum()
-                residual_error = (projected_labels_squared / ((1 + sigma / tau) ** 2)).sum() + residual_sum_squares
+                precision_weighted_sum = (sigma * projected_labels / ((tau + sigma) ** 2)).sum()
+                residual_error = (projected_labels / ((1 + sigma / tau) ** 2)).sum() + residual_sum_squares
 
-                # Update alpha (prior precision) and beta (likelihood precision)
+                # Update alpha and beta
                 alpha = gamma / (precision_weighted_sum + 1e-5)
                 beta = (num_samples - gamma) / (residual_error + 1e-5)
-
-                # Compute the new tau and stop if convergence criterion is met
-                new_tau = alpha / beta
-                if abs(new_tau - tau) / tau <= tol:
+                if abs(alpha / beta - tau) / tau <= tol:
                     break
 
-            # Compute evidence using optimized alpha and beta
+            # Compute model evidence
             evidence = (
                 hidden_size / 2.0 * torch.log(alpha)
                 + num_samples / 2.0 * torch.log(beta)

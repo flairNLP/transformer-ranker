@@ -2,7 +2,7 @@ from typing import Union
 
 import torch
 from torch.nn.functional import cosine_similarity
-from torchmetrics.classification import BinaryF1Score, MulticlassF1Score
+from torchmetrics.functional import f1_score
 
 from .base import Estimator
 
@@ -12,12 +12,12 @@ class NearestNeighbors(Estimator):
         """
         K-Nearest Neighbors estimator.
 
-        :param k: Number of nearest neighbors to consider.
+        :param k: Number of nearest neighbors to consider (3 by default).
         :param regression: Boolean flag if the task is regression.
         """
         super().__init__(regression=regression)
 
-        self.k = k  # number of neighbors
+        self.k = k
         self.distance_metrics = {
             "euclidean": lambda x, y: torch.cdist(x, y, p=2),
             "cosine": lambda x, y: 1 - cosine_similarity(x[:, None, :], y[None, :, :], dim=-1),
@@ -71,13 +71,8 @@ class NearestNeighbors(Estimator):
             # Majority voting for classification
             y_pred = torch.mode(knn_labels, dim=1).values
 
-            f1: Union[BinaryF1Score, MulticlassF1Score]
-            if num_classes == 2:
-                f1 = BinaryF1Score(average="micro")
-            else:
-                f1 = MulticlassF1Score(average="micro", num_classes=num_classes)
-
-            score = f1(y_pred.to("cpu"), labels.to("cpu")).item()
+            task = "multiclass" if num_classes > 2 else "binary"
+            score = f1_score(y_pred, labels, task=task, num_classes=num_classes, average="micro").item()
 
         self.score = score
         return score
