@@ -13,21 +13,8 @@ def small_language_models():
 
 
 @pytest.fixture(scope="session")
-def custom_dataset():
-    """One a custom dataset"""
-    return Dataset.from_dict(
-        {
-            "text": ["whatsup", "quick", "", "datasets", "test"],
-            "text_pair": ["Papers", "with", "code", "humboldt", "focus"],
-            "label": [1, 0, 2, 1, 2],
-            "extra": [100, 200, 300, 400, 500],
-        }
-    )
-
-
-@pytest.fixture(scope="session")
 def conll():
-    """Ner dataset, load once and keep"""
+    """One ner dataset, load once and keep"""
     return load_dataset("conll2003", trust_remote_code=True)
 
 
@@ -53,3 +40,16 @@ def sick():
 def stsb():
     """Sts-b has floats as labels (regression)"""
     return load_dataset("glue", "stsb", trust_remote_code=True)
+
+
+@pytest.fixture(scope="session")
+def custom_dataset():
+    """Prepare a small custom dataset"""
+    return Dataset.from_dict(
+        {
+            "text": ["whatsup", "quick", "", "datasets", "test"],
+            "text_pair": ["Papers", "with", "code", "humboldt", "focus"],
+            "label": [1, 0, 2, 1, 2],
+            "extra": [100, 200, 300, 400, 500],
+        }
+    )

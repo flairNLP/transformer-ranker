@@ -6,14 +6,14 @@ from transformer_ranker.datacleaner import DatasetCleaner
 
 
 def test_find_columns(custom_dataset):
-    """Test text and label column names"""
+    """Test that text and label column names can be found."""
     cleaner = DatasetCleaner()
     assert cleaner._find_column(custom_dataset, "text column") == "text", "Column name for texts not found"
     assert cleaner._find_column(custom_dataset, "label column") == "label", "Column name for labels not found"
 
 
 def test_merge_text_pairs(custom_dataset):
-    """Test merging text pair columns"""
+    """Test merging text pair columns."""
     cleaner = DatasetCleaner(text_column="text", text_pair_column="text_pair")
     dataset = cleaner._merge_text_pairs(custom_dataset, "text", "text_pair")
     expected = [f"{text} [SEP] {pair}" for text, pair in zip(custom_dataset["text"], custom_dataset["text_pair"])]
@@ -21,21 +21,21 @@ def test_merge_text_pairs(custom_dataset):
 
 
 def test_downsample_ratio(custom_dataset):
-    """Test size after downsampling"""
+    """Test size after downsampling."""
     cleaner = DatasetCleaner(dataset_downsample=0.5)
     dataset = cleaner._downsample(custom_dataset, 0.5)
     assert len(dataset) == 2, "Issues with downsampling"
 
 
 def test_cleanup_rows(custom_dataset):
-    """Test removing empty rows"""
+    """Test removing empty rows."""
     cleaner = DatasetCleaner()
     dataset = cleaner._cleanup_rows(custom_dataset, "text", "label")
     assert len(dataset) == 4, "Empty texts should've been removed"
 
 
 def test_label_map(trec, conll):
-    """Test label maps for trec and conll"""
+    """Test label maps for trec and conll."""
     cleaner = DatasetCleaner()
     trec, conll = trec["train"], conll["train"]
 
@@ -51,7 +51,7 @@ def test_label_map(trec, conll):
 
 
 def test_bio_decoding(conll):
-    """Test removing of BIO prefixes for NER labels"""
+    """Test removing of BIO prefixes for NER labels."""
     cleaner = DatasetCleaner()
     conll = conll["train"]
     label_column = cleaner._find_column(conll, "label column")
@@ -73,7 +73,7 @@ def test_bio_decoding(conll):
     ],
 )
 def test_different_datasets(task_type, dataset_name, downsample_ratio):
-    """Load various datasets and check datacleaner outputs"""
+    """Load various datasets and check datacleaner outputs."""
     dataset = load_dataset(dataset_name, trust_remote_code=True)
     cleaner = DatasetCleaner(dataset_downsample=downsample_ratio)
     texts, labels, task_category = cleaner.prepare_dataset(dataset)

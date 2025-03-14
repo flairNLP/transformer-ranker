@@ -3,17 +3,19 @@ import torch
 
 from transformer_ranker.embedder import Embedder
 
-
 test_sentences = [
     "this is a test sentence",
     ["this", "is", "a", "test", "sentence"],
     ["this is the first sentence.", "this is the second sentence."],
-    [["this", "is", "the", "first", "sentence", "."], ["this", "is", "the", "second", "sentence", "."]],
+    [
+        ["this", "is", "the", "first", "sentence", "."],
+        ["this", "is", "the", "second", "sentence", "."],
+    ],
 ]
 
 
 def test_embedder_outputs(small_language_models):
-    """Test for output types"""
+    """Ensure embedder output is a list of non-empty tensors."""
     for model in small_language_models:
         embedder = Embedder(model=model)
 
@@ -25,7 +27,7 @@ def test_embedder_outputs(small_language_models):
 
 
 def test_embedder_word_level(small_language_models):
-    """Test dimensions for word embeddings"""
+    """Test word embeddings shape."""
     for model in small_language_models:
         embedder = Embedder(model=model)
         embedding = embedder.embed("this is a test sentence")  # 5 words
@@ -34,7 +36,7 @@ def test_embedder_word_level(small_language_models):
 
 
 def test_embedder_sentence_level(small_language_models):
-    """Test dimensions for text embeddings"""
+    """Test text embeddings shape."""
     for model in small_language_models:
         embedder = Embedder(model=model, sentence_pooling="mean")
         embedding = embedder.embed("this is a test sentence")
@@ -43,7 +45,7 @@ def test_embedder_sentence_level(small_language_models):
 
 
 def test_embedder_layermean(small_language_models):
-    """Test dimensions when layer mean is set"""
+    """Test shape after layermean is set to true."""
     for model in small_language_models:
         embedder = Embedder(model=model, layer_mean=True)
         embedding = embedder.embed("this is a test sentence")
@@ -52,6 +54,7 @@ def test_embedder_layermean(small_language_models):
 
 
 def test_embedder_layer_selection(small_language_models):
+    """Test the layer id parameter."""
     _, electra_small = small_language_models
     embedder = Embedder(electra_small)
 
@@ -72,7 +75,7 @@ def test_embedder_layer_selection(small_language_models):
 
 
 def test_embedder_edge_cases(small_language_models):
-    """Test embedder with unusual cases"""
+    """Test text embedding with unusual inputs."""
     for model in small_language_models:
         embedder = Embedder(model=model)
 
