@@ -1,8 +1,2 @@
-datasets
-scikit-learn
-sentencepiece
-tokenizers
-torch
-torchmetrics
-tqdm
-transformers
+# requirements in pyproject.toml
+-e .

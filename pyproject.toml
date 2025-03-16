@@ -1,18 +1,56 @@
-[tool.pytest.ini_options]
-pythonpath = "."
+[build-system]
+requires = ["setuptools>=70.1.0"]
+build-backend = "setuptools.build_meta"
 
-[tool.mypy]
-files="transformer_ranker"
-ignore_missing_imports = true
-check_untyped_defs = true
+[project]
+name = "transformer-ranker"
+description = "Efficiently find the best-suited language model (LM) for your NLP task"
+version = "0.1.2"
+authors = [{ name = "Lukas Garbas", email = "lukas.garbaciauskas@informatik.hu-berlin.de" }]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = ["transferability", "language models"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "datasets",
+    "sentencepiece",
+    "scikit-learn",
+    "tokenizers",
+    "torch",
+    "torchmetrics",
+    "tqdm",
+    "transformers"
+]
+
+[project.urls]
+Homepage = "https://github.com/flairNLP/transformer-ranker"
+Repository = "https://github.com/flairNLP/transformer-ranker"
+Documentation = "https://github.com/flairNLP/transformer-ranker/tree/main/examples"
+
+[tool.setuptools.packages.find]
+include = ["transformer_ranker*"]
+
+[project.optional-dependencies]
+testing = ["pytest"]
+dev = ["black", "isort", "ruff"]
+
+[tool.black]
+line-length = 120
+target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
+
+[tool.isort]
+profile = "black"
+line_length = 120
+skip = ["examples/code_examples"]
 
 [tool.ruff]
 line-length = 120
-exclude = ["examples/*"]
-
-[tool.ruff.lint.isort]
-lines-after-imports = 2
 
 [tool.ruff.format]
 quote-style = "double"
-skip-magic-trailing-comma = false
