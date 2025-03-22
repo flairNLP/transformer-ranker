@@ -1,40 +1,36 @@
 # Tutorial 2: Learn by Example
 
-This tutorial shows many usage examples of TransformerRanker. The idea is that
-you see the library in action for many NLP tasks and some special cases, and pick
-up functionality along the way. 
+This tutorial shows many usage examples of TransformerRanker. The idea is that you see the library in action 
+for many NLP tasks and some special cases, and pick up functionality along the way. 
 
-It probably makes sense to first complete tutorial 1 to learn all the basic concepts in
-TransformerRanker. 
+It probably makes sense to first complete tutorial 1 to learn all the basic concepts in TransformerRanker. 
 
 ## Example 1: Named Entity Recognition (NER) on Tweets
 
 In this example, find the best-suited LMs for English NER on tweets. The full code is:
 
-```python3
+```python
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker, prepare_popular_models
 
 # Load the WNUT-17 dataset of English tweets annotated with NER labels
-dataset_ner = load_dataset('leondz/wnut_17')
+dataset = load_dataset('leondz/wnut_17')
 
 # Load a list of popular 'base' models
 language_models = prepare_popular_models('base')
 
 # Initialize the Ranker, but also let it know what the text and label column is
-ranker_ner = TransformerRanker(dataset_ner,
-                               dataset_downsample=0.7,
-                               )
+ranker = TransformerRanker(dataset, dataset_downsample=0.7)
 
-results_ner = ranker_ner.run(language_models, batch_size=64)
+results = ranker.run(language_models, batch_size=64)
 
 # Inspect results
 print(results_ner)
 ```
 
-**Explanation**: This is essentially the same code as our introductory example. The only difference is that we downsample to 
-70% (instead of the default 20%). The reason for this is that WNUT-17 is already rather small so we don't need to
-downsample too much.
+**Explanation**: This is essentially the same code as our introductory example. The only difference is that we 
+downsample to 70% (instead of the default 20%). The reason for this is that WNUT-17 is already rather small so
+we don't need to downsample too much.
 
 If you run this code, you should get: 
 
@@ -64,7 +60,7 @@ Rank 17. dmis-lab/biobert-base-cased-v1.2: 0.9517
 
 In this example, we find the best-suited LMs for English part-of-speech tagging. The full code is:
 
-```python3
+```python
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker, prepare_popular_models
 
@@ -90,8 +86,8 @@ print(results)
 
 **Note:** You may need to `pip install connlu` to run this example.
 
-**Explanation**: This example is a bit more complicated since we use the Universal Dependencies (UD) dataset. UD contains
-many languages (English, German, Japanese, etc.) and annotates each sentence with many different layers of 
+**Explanation**: This example is a bit more complicated since we use the Universal Dependencies (UD) dataset.
+UD contains many languages (English, German, Japanese, etc.) and annotates each sentence with many different layers of 
 annotation (part-of-speech, universal part-of-speech, lemmas, morphology, dependency trees, etc.). 
 For this reason, we pass `label_column="upos"` to the ranker, to let it know we want to predict 
 universal part-of-speech tags (and not other annotations like lemmas).
@@ -166,10 +162,10 @@ you have the compute.
 
 Let's rank large models on the task of question classification: 
 
+```python
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker, prepare_popular_models
 
-```python
 # Load a dataset
 dataset = load_dataset('trec')
 
@@ -212,7 +208,7 @@ Rank 11. KISTI-AI/scideberta: 3.7448
 ## Example 4: Text Pair Classificatiom
 
 Some NLP do not classify a single text, but rather two. For instance, the task of 
-reconizing texutal entailment has two inputs: a premise and a hypothesis. 
+recognizing textual entailment has two inputs: a premise and a hypothesis. 
 
 You can use TransformerRanker also for text pair tasks, but you need to specify which
 columns in the dataset belong to the text pair: 
@@ -277,10 +273,10 @@ First, we print the RTE dataset to understand it better:
 from datasets import load_dataset
 
 # Load Universal Dependencies PoS dataset
-dataset_pos = load_dataset('SetFit/rte')
+dataset = load_dataset('SetFit/rte')
 
 # Inspect the dataset
-print(dataset_pos)
+print(dataset)
 ```
 
 This outputs: 
