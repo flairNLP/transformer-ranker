@@ -14,10 +14,12 @@ logger = configure_logger("transformer_ranker", logging.INFO)
 
 class TaskCategory(str, Enum):
     """Supported task categories"""
-    TOKEN_CLASSIFICATION = "token classification"
+
     TEXT_CLASSIFICATION = "text classification"
     TEXT_PAIR_CLASSIFICATION = "text pair classification"
+    TEXT_PAIR_REGRESSION = "text pair regression"
     TEXT_REGRESSION = "text regression"
+    TOKEN_CLASSIFICATION = "token classification"
 
 
 @dataclass
@@ -51,13 +53,12 @@ class DatasetCleaner:
             dataset = datasets.concatenate_datasets(list(dataset.values()))
 
         # Find text and label fields, set the task category
-        text_column = self.text_column if self.text_column else self._find_column(dataset, "text column")
-        label_column = self.label_column if self.label_column else self._find_column(dataset, "label column")
-        task_category = self.task_category if self.task_category else self._find_task_category(dataset, label_column)
+        text_column = self.text_column or self._find_column(dataset, "text column")
+        label_column = self.label_column or self._find_column(dataset, "label column")
+        task_category = self.task_category or self._find_task_category(dataset, label_column, self.text_pair_column)
 
         # Merge text pair columns using a separator
         if self.text_pair_column:
-            task_category = TaskCategory.TEXT_PAIR_CLASSIFICATION
             dataset = self._merge_text_pairs(dataset, text_column, self.text_pair_column)
             text_column = f"{text_column}_with_{self.text_pair_column}"
 
@@ -143,7 +144,9 @@ class DatasetCleaner:
         return dataset
 
     @staticmethod
-    def _find_task_category(dataset: Dataset, label_column: str) -> TaskCategory:
+    def _find_task_category(
+        dataset: Dataset, label_column: str, text_pair_column: Optional[str] = None
+    ) -> TaskCategory:
         """Assign task category based on label type."""
         label_to_task_category = {
             int: TaskCategory.TEXT_CLASSIFICATION,
@@ -152,22 +155,27 @@ class DatasetCleaner:
             float: TaskCategory.TEXT_REGRESSION,
         }
 
+        # Label type should be consistent across dataset
         label_types = list(set(type(label) for label in dataset[label_column]))
-
+        label_type = label_types[0]
         if len(label_types) != 1:
+            raise ValueError(f"Inconsistent label types: {label_types}. Ensure all labels are the same.")
+
+        task_category = label_to_task_category.get(label_type, None)
+        if not task_category:
             raise ValueError(
-                f"The dataset has inconsistent types in the label column: {label_types}. "
-                f"All labels should have the same type."
+                f"Can't determine task category for {label_type}. Supported: {list(label_to_task_category.keys())}."
             )
 
-        for key, task_category in label_to_task_category.items():
-            if issubclass(label_types[0], key):
-                return task_category
+        # If text pairs are present, adjust category
+        if text_pair_column in dataset.column_names:
+            pair_mapping = {
+                TaskCategory.TEXT_CLASSIFICATION: TaskCategory.TEXT_PAIR_CLASSIFICATION,
+                TaskCategory.TEXT_REGRESSION: TaskCategory.TEXT_PAIR_REGRESSION,
+            }
+            task_category = pair_mapping.get(task_category, task_category)
 
-        raise ValueError(
-            f"Cannot determine task category for the label column '{label_column}'. "
-            f"Supported label types for are {list(label_to_task_category.keys())}."
-        )
+        return task_category
 
     @staticmethod
     def _downsample(dataset: Dataset, ratio: float) -> Dataset:

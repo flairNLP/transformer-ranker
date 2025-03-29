@@ -1,18 +1,18 @@
 # Tutorial 3: Advanced
 
-Previous tutorials demonstrated ranking models with standard datasets and default parameters in the TransformerRanker.
-This tutorial moves further by showing how to load custom datasets not available on the Hugging Face Hub.
-Then, we introduce two optional parameters: the transferability metric and the layer aggregation method.
+Previous tutorials showed how to rank LMs using default parameters and datasets from the hub.
+This one covers how to load custom datasets and use two optional parameters in the ranker: `estimator` and `layer_aggregator`.
 
 ## Loading Custom Datasets
 
-TransformerRanker uses the `load_dataset()` method from the **Datasets** library.
-To load a dataset from local files instead of the hub, prepare your dataset as `.txt` files in a directory
-and load it as follows:
+TransformerRanker uses `load_dataset()` from the 🤗 Datasets library.
+To load local text files instead of datasets from the hub, do:
 
 ```python
 from datasets import load_dataset
+from transformer_ranker import TransformerRanker, prepare_popular_models
 
+# Load dataset from text files
 dataset = load_dataset(
     "text",
     data_files={
@@ -21,52 +21,57 @@ dataset = load_dataset(
         "test": "path/to/dataset/test.txt",  # optional
     },
 )
+
+# Prepare language models
+language_models = prepare_popular_models('base')
+
+# Initialize the ranker with the dataset
+ranker = TransformerRanker(dataset=dataset, dataset_downsample=0.2)
+
+# ... and run it
+results = ranker.run(models=language_models, batch_size=32)
 ```
 
-Splitting into train/dev/test is optional—TransformerRanker automatically merges and downsamples datasets for ranking.
+Train/dev/test splits are optional—TransformerRanker merges and downsamples datasets automatically. Once loaded,
+initialize the ranker with your dataset as shown in previous tutorials. For `.csv` or `.json` formats, see the complete
+load_dataset() [guide](https://huggingface.co/docs/datasets/v1.7.0/loading_datasets.html#from-local-files).
 
-For `.csv` or `.json` datasets, refer to the official
-[load_datasets() guide](https://huggingface.co/docs/datasets/v1.7.0/loading_datasets.html#from-local-files). 
+## Transferability Metric
 
-Once loaded, initialize TransformerRanker with your dataset as shown in previous tutorials.
-
-## Setting the Transferability Metric
-
-Transferability metric can be changed using the `estimator` parameter in the `.run()` method.
-The supported metrics are: 
-
-- **H-score (default):** fast and accurate for most datasets, suited for classification tasks.
-- **LogME:** Suited for both classification and regression tasks.
-- **Nearest Neighbors:** Slowest and least accurate, but easy to interpret.
-
-To change the metric to LogME, do this then running the ranker:
+Transferability metric can be changed by setting the `estimator` parameter in the `.run()` method.
+For example, to switch to the LogME, do:
 
 ```python
-result = ranker.run(language_models, estimator="logme")
+results = ranker.run(language_models, estimator="logme")
 ```
 
-For better understanding of each metric, see [code and comments](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/).
+__Transferability Explanation:__ Transferability metrics estimate how well a model can apply its knowledge to a new task without fine-tuning.
+For a pre-trained LM, this means assessing how well its embeddings align with a new dataset.
 
+Here are the supported metrics:
 
-## Setting the Layer Aggregation
+- `hscore` (default): Fast and generally the best choice for most datasets, suited for classification tasks [H-Score code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/hscore.py).
+- `logme`: Suitable for both classification and regression tasks [LogME code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/logme.py).
+- `nearestneigbors`: Slowest and least accurate, but easy to interpret [k-NN code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/nearesneighbors.py).
 
-Another parameter that can influence the ranking quality is the `layer_aggegator='layermean'`. 
-This can optionally be changed to one of the following:
+For a better understanding of each metric, refer to the comments in the code or see the original papers. 
 
-- **Last layer** uses the last hidden state as embeddings from each language model.
-- **Layer mean** uses the average of all hidden states as an embedding in a language model.
-- **Best layer** uses the layer that results in a highest transferability score. 
+## Layer Aggregation
 
-Here's how to set the aggregation to `bestlayer`:
+Layer aggregation method can be changed by setting the `layer_aggregator` parameter in the `.run()` method.
+For example, to use the best performing layer, do:
 
 ```python
-result = ranker.run(language_models, estimator="logme", layer_aggregator="bestlayer")
+results = ranker.run(language_models, layer_aggregator="bestlayer")
 ```
 
-The default settings are `hscore` for estimator and `layermean` for layer aggregation (which generally perform well).
-Some datasets can benefit from different configurations.
+Here are the supported methods:
 
-## Example: Ranking on CoNLL2003 using custom parameters
+- `layermean` (default): Averages of all hidden states in a language model.
+- `bestlayer`: Scores each hidden state and uses the layer with the highest transferability score.
+- `lastlayer`: Uses the last hidden state as embeddings of a language model. 
+
+## Example: CoNLL2003 with Custom Settings
 
 Below, we show the use of `logme` and `bestlayer` with the CoNLL2003 dataset:
 
@@ -83,14 +88,15 @@ language_models = prepare_popular_models('base')
 # Initialize the ranker with the dataset
 ranker = TransformerRanker(dataset, dataset_downsample=0.2)
 
-# Run the ranker with custom settings
+# ... and run it with custom settings
 results = ranker.run(language_models, estimator="logme", layer_aggregator="bestlayer")
-
-# Display the ranking results
-print(results)
 ```
 
 The output should look as follows:
+
+```python
+print(results)
+```
 
 ```console
 Rank 1. microsoft/mdeberta-v3-base: 0.7566
@@ -112,7 +118,7 @@ Rank 16. SpanBERT/spanbert-base-cased: 0.4299
 Rank 17. dmis-lab/biobert-base-cased-v1.2: 0.3931
 ```
 
-Compare this ranking with the one in the main __README__.
+Compare this ranking with the one in the main [README](https://github.com/flairNLP/transformer-ranker?tab=readme-ov-file#example-2-really-find-the-best-lm).
 
 ## Summary
 

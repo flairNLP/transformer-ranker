@@ -2,22 +2,14 @@ import pytest
 import torch
 from datasets import load_dataset
 
-from transformer_ranker.datacleaner import DatasetCleaner
+from transformer_ranker.datacleaner import DatasetCleaner, TaskCategory
 
 
 def test_find_columns(custom_dataset):
     """Test that text and label column names can be found."""
     cleaner = DatasetCleaner()
-    assert cleaner._find_column(custom_dataset, "text column") == "text", "Column name for texts not found"
-    assert cleaner._find_column(custom_dataset, "label column") == "label", "Column name for labels not found"
-
-
-def test_merge_text_pairs(custom_dataset):
-    """Test merging text pair columns."""
-    cleaner = DatasetCleaner(text_column="text", text_pair_column="text_pair")
-    dataset = cleaner._merge_text_pairs(custom_dataset, "text", "text_pair")
-    expected = [f"{text} [SEP] {pair}" for text, pair in zip(custom_dataset["text"], custom_dataset["text_pair"])]
-    assert dataset["text_with_text_pair"] == expected, "Columns are merged incorrectly"
+    assert cleaner._find_column(custom_dataset, "text column") == "text"
+    assert cleaner._find_column(custom_dataset, "label column") == "label"
 
 
 def test_downsample_ratio(custom_dataset):
@@ -60,25 +52,50 @@ def test_bio_decoding(conll):
     assert new_label_map == {"O": 0, "PER": 1, "ORG": 2, "LOC": 3, "MISC": 4}
 
 
+def test_merge_text_pairs(custom_dataset):
+    """Test merging text pair columns."""
+    cleaner = DatasetCleaner(text_column="text", text_pair_column="text_pair")
+    dataset = cleaner._merge_text_pairs(custom_dataset, "text", "text_pair")
+    expected = [f"{text} [SEP] {pair}" for text, pair in zip(custom_dataset["text"], custom_dataset["text_pair"])]
+    assert dataset["text_with_text_pair"] == expected, "Columns are merged incorrectly"
+
+
 @pytest.mark.parametrize(
-    "task_type,dataset_name,downsample_ratio",
+    "dataset_name,text_pair_column,task_category",
     [
-        ("token classification", "conll2003", 0.01),
-        ("token classification", "wnut_17", 0.05),
-        ("text classification", "trec", 0.05),
-        ("text classification", "stanfordnlp/sst2", 0.005),
-        ("text classification", "hate_speech18", 0.025),
-        ("text classification", "yangwang825/sick", 0.025),
-        ("text classification", "SetFit/rte", 0.05),
+        ("trec", None, TaskCategory.TEXT_CLASSIFICATION),
+        ("yangwang825/sick", "text2", TaskCategory.TEXT_PAIR_CLASSIFICATION),
+        ("SetFit/rte", "text2", TaskCategory.TEXT_PAIR_CLASSIFICATION),
+        ("SetFit/stsb", "text2", TaskCategory.TEXT_PAIR_REGRESSION),
     ],
 )
-def test_different_datasets(task_type, dataset_name, downsample_ratio):
-    """Load various datasets and check datacleaner outputs."""
+def test_task_category_assignment(dataset_name, text_pair_column, task_category):
+    """Test task category assignment for different datasets."""
+    dataset = load_dataset(dataset_name, trust_remote_code=True)
+    cleaner = DatasetCleaner(text_pair_column=text_pair_column, dataset_downsample=0.05)
+    _, _, task = cleaner.prepare_dataset(dataset)
+    assert task == task_category, f"Expected '{task_category}',got '{task}' for {dataset_name}."
+
+
+@pytest.mark.parametrize(
+    "dataset_name,task_category,downsample_ratio",
+    [
+        ("conll2003", TaskCategory.TOKEN_CLASSIFICATION, 0.01),
+        ("wnut_17", TaskCategory.TOKEN_CLASSIFICATION, 0.05),
+        ("trec", TaskCategory.TEXT_CLASSIFICATION, 0.05),
+        ("stanfordnlp/sst2", TaskCategory.TEXT_CLASSIFICATION, 0.005),
+        ("hate_speech18", TaskCategory.TEXT_CLASSIFICATION, 0.025),
+        ("yangwang825/sick", TaskCategory.TEXT_CLASSIFICATION, 0.025),
+        ("SetFit/rte", TaskCategory.TEXT_CLASSIFICATION, 0.05),
+        ("SetFit/stsb", TaskCategory.TEXT_REGRESSION, 0.05),
+    ],
+)
+def test_different_datasets(dataset_name, task_category, downsample_ratio):
+    """Load different datasets and verify preprocessing of texts, labels, and task category."""
     dataset = load_dataset(dataset_name, trust_remote_code=True)
     cleaner = DatasetCleaner(dataset_downsample=downsample_ratio)
-    texts, labels, task_category = cleaner.prepare_dataset(dataset)
+    texts, labels, task = cleaner.prepare_dataset(dataset)
 
-    assert task_category == task_type, f"Expected task category '{task_type}' but got '{task_category}'."
-    assert isinstance(texts, list) and texts, "Texts should not be empty."
-    assert isinstance(labels, torch.Tensor) and labels.numel() > 0, "Labels tensor should not be empty."
-    assert (labels >= 0).all(), "Labels should be positive"
+    assert task == task_category, f"Expected {task_category}, got {task} for {dataset_name}."
+    assert isinstance(texts, list) and texts, f"Empty texts in {dataset_name}."
+    assert isinstance(labels, torch.Tensor) and labels.numel() > 0, f"Empty labels in {dataset_name}."

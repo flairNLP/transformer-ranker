@@ -19,13 +19,13 @@ dataset = load_dataset('leondz/wnut_17')
 # Load a list of popular 'base' models
 language_models = prepare_popular_models('base')
 
-# Initialize the Ranker, but also let it know what the text and label column is
+# Initialize the ranker
 ranker = TransformerRanker(dataset, dataset_downsample=0.7)
 
+# ... and run it
 results = ranker.run(language_models, batch_size=64)
 
-# Inspect results
-print(results_ner)
+print(results)
 ```
 
 **Explanation**: This is essentially the same code as our introductory example. The only difference is that we 
@@ -70,7 +70,7 @@ dataset_pos = load_dataset('universal-dependencies/universal_dependencies', 'en_
 # Load a list of popular 'base' models
 language_models = prepare_popular_models('base')
 
-# Initialize the Ranker, but also let it know what the text and label column is
+# Initialize the ranker, but also let it know what the text and label column is
 ranker = TransformerRanker(dataset_pos,
                            dataset_downsample=0.5,
                            text_column="tokens", # in this dataset, the text column is labeled "tokens"
@@ -80,7 +80,6 @@ ranker = TransformerRanker(dataset_pos,
 # ... and run it
 results = ranker.run(language_models, batch_size=64)
 
-# Inspect results
 print(results)
 ```
 
@@ -169,17 +168,16 @@ from transformer_ranker import TransformerRanker, prepare_popular_models
 # Load a dataset
 dataset = load_dataset('trec')
 
-# Load a predefined models or create your own list of models
+# Load predefined models or create your own list of models
 language_models = prepare_popular_models('large')
 print(language_models)
 
 # Initialize the ranker with the dataset
 ranker = TransformerRanker(dataset, dataset_downsample=0.2)
 
-# Run it with your models
+# ... and run it with larger models
 results = ranker.run(language_models, batch_size=64)
 
-# Inspect results
 print(results)
 ```
 
@@ -233,7 +231,6 @@ ranker = TransformerRanker(dataset=dataset,
 # ... and run it
 result = ranker.run(models=language_models, batch_size=32)
 
-# Print the scores
 print(result)
 ```
 
