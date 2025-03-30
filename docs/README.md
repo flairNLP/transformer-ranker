@@ -1,5 +1,4 @@
-
-# TransformerRanker Documentation
+# Documentation
 
 Welcome to the documentation (/tutorials) of the TransformerRanker. This tool lets you rank language models LMs for downstream NLP tasks. 
 It currently supports token, text, and text-pair classification, as well as regression tasks.
@@ -22,4 +21,4 @@ pip install -e .
 ```
 
 This clones the repository and installs deps. 
-Then, you can start by running the [first code example](https://github.com/flairNLP/transformer-ranker/blob/main/docs/01-walkthrough.md#example-task) found in the walkthrough.
+Then, you can start by running the [first code example](https://github.com/flairNLP/transformer-ranker/blob/main/docs/01-walkthrough.md#example-task) from the walkthrough.
