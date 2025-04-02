@@ -17,133 +17,6 @@ The goal of this tutorial is to understand these four steps.
 
 For this tutorial, we use the example task of text classification over the classic TREC dataset. Our goal is
 to find the best-suited language model. The full code for ranking LMs on TREC is:
-# Tutorial 3: Advanced
-
-Previous tutorials showed how to rank LMs using default parameters and datasets from the hub.
-This one covers how to load custom datasets and use two optional parameters in the ranker: `estimator` and `layer_aggregator`.
-
-## Loading Custom Datasets
-
-TransformerRanker uses `load_dataset()` from the 🤗 Datasets library.
-To load local text files instead of datasets from the hub, do:
-
-```python
-from datasets import load_dataset
-from transformer_ranker import TransformerRanker, prepare_popular_models
-
-# Load dataset from text files
-dataset = load_dataset(
-    "text",
-    data_files={
-        "train": "path/to/dataset/train.txt",
-        "dev": "path/to/dataset/dev.txt",  # optional
-        "test": "path/to/dataset/test.txt",  # optional
-    },
-)
-
-# Prepare language models
-language_models = prepare_popular_models('base')
-
-# Initialize the ranker with the dataset
-ranker = TransformerRanker(dataset=dataset, dataset_downsample=0.2)
-
-# ... and run it
-results = ranker.run(models=language_models, batch_size=32)
-```
-
-Train/dev/test splits are optional—TransformerRanker merges and downsamples datasets automatically. Once loaded,
-initialize the ranker with your dataset as shown in previous tutorials. For `.csv` or `.json` formats, see the complete
-load_dataset() [guide](https://huggingface.co/docs/datasets/v1.7.0/loading_datasets.html#from-local-files).
-
-## Transferability Metric
-
-Transferability metric can be changed by setting the `estimator` parameter in the `.run()` method.
-For example, to switch to the LogME, do:
-
-```python
-results = ranker.run(language_models, estimator="logme")
-```
-
-__Transferability Explanation:__ Transferability metrics estimate how well a model can apply its knowledge to a new task without fine-tuning.
-For a pre-trained LM, this means assessing how well its embeddings align with a new dataset.
-
-Here are the supported metrics:
-
-- `hscore` (default): Fast and generally the best choice for most datasets, suited for classification tasks [H-Score code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/hscore.py).
-- `logme`: Suitable for both classification and regression tasks [LogME code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/logme.py).
-- `nearestneigbors`: Slowest and least accurate, but easy to interpret [k-NN code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/nearesneighbors.py).
-
-For a better understanding of each metric, refer to the comments in the code or see the original papers. 
-
-## Layer Aggregation
-
-Layer aggregation method can be changed by setting the `layer_aggregator` parameter in the `.run()` method.
-For example, to use the best performing layer, do:
-
-```python
-results = ranker.run(language_models, layer_aggregator="bestlayer")
-```
-
-Here are the supported methods:
-
-- `layermean` (default): Averages of all hidden states in a language model.
-- `bestlayer`: Scores each hidden state and uses the layer with the highest transferability score.
-- `lastlayer`: Uses the last hidden state as embeddings of a language model. 
-
-## Example: CoNLL2003 with Custom Settings
-
-Below, we show the use of `logme` and `bestlayer` with the CoNLL2003 dataset:
-
-```python
-from datasets import load_dataset
-from transformer_ranker import TransformerRanker, prepare_popular_models
-
-# Load the CoNLL-03 dataset from HuggingFace
-dataset = load_dataset('conll2003')
-
-# Prepare a list of popular 'base' LMs as candidates
-language_models = prepare_popular_models('base')
-
-# Initialize the ranker with the dataset
-ranker = TransformerRanker(dataset, dataset_downsample=0.2)
-
-# ... and run it with custom settings
-results = ranker.run(language_models, estimator="logme", layer_aggregator="bestlayer")
-```
-
-The output should look as follows:
-
-```python
-print(results)
-```
-
-```console
-Rank 1. microsoft/mdeberta-v3-base: 0.7566
-Rank 2. microsoft/deberta-v3-base: 0.7565
-Rank 3. typeform/distilroberta-base-v2: 0.7165
-Rank 4. google/electra-base-discriminator: 0.7115
-Rank 5. roberta-base: 0.702
-Rank 6. sentence-transformers/all-mpnet-base-v2: 0.6895
-Rank 7. FacebookAI/xlm-roberta-base: 0.689
-Rank 8. bert-base-cased: 0.6843
-Rank 9. Twitter/twhin-bert-base: 0.6685
-Rank 10. german-nlp-group/electra-base-german-uncased: 0.6088
-Rank 11. sentence-transformers/all-MiniLM-L12-v2: 0.5829
-Rank 12. distilbert-base-cased: 0.5685
-Rank 13. Lianglab/PharmBERT-cased: 0.5365
-Rank 14. google/electra-small-discriminator: 0.5128
-Rank 15. KISTI-AI/scideberta: 0.4777
-Rank 16. SpanBERT/spanbert-base-cased: 0.4299
-Rank 17. dmis-lab/biobert-base-cased-v1.2: 0.3931
-```
-
-Compare this ranking with the one in the main [README](https://github.com/flairNLP/transformer-ranker?tab=readme-ov-file#example-2-really-find-the-best-lm).
-
-## Summary
-
-Here, we demonstrated how to load a custom dataset not hosted on the Hugging Face Hub.
-We then introduced two optional parameters for TransformerRanker: `estimator` and `layer_aggregator`,
-which can be adjusted based on the task or used to compare different transferability metrics.
 
 ```python
 from datasets import load_dataset
@@ -270,16 +143,16 @@ ranker = TransformerRanker(dataset=dataset, dataset_downsample=0.2)
 small_models = ['prajjwal1/bert-tiny', 'google/electra-small-discriminator']
 
 # ... using a large batch size
-results = ranker.run(models=small_models, batch_size=128)
+result = ranker.run(models=small_models, batch_size=128)
 
 # Step 2: Add rankings of larger models
 large_models = ['bert-large-cased', 'google/electra-large-discriminator']
 
 ## ... using a small batch size
-results.append(ranker.run(batch_size=16, models=large_models))
+result.append(ranker.run(batch_size=16, models=large_models))
 
 # Look at merged results
-print(results)
+print(result)
 ```
 
 </details>
@@ -312,8 +185,8 @@ It iterates over each model and (1) embeds texts, (2) scores embeddings using an
 Logs show which model is currently being assessed.
 
 ```bash
-transformer_ranker:Task category: 'text classification'
 transformer_ranker:Text and label columns: 'text', 'coarse_label'
+transformer_ranker:Task type: 'text classification'
 transformer_ranker:Dataset size: 1190 (downsampled to 0.2)
 Computing Embeddings:  100%|██████████| 19/19 [00:02<00:00,  7.69it/s]
 Transferability Score: 100%|██████████| 1/1 [00:00<00:00,  1.01it/s]
@@ -333,7 +206,6 @@ We used Colab Notebook with a Tesla T4 GPU. Note that TREC has short texts (10 w
 
 Doing `print(results)` displays the ranked language models from Step 2, along with their **transferability scores**.  
 A **higher score** means the model is better suited for your dataset.
-
 Here’s the output after ranking 17 language models on TREC:
 
 ```bash
@@ -356,7 +228,7 @@ Rank 16. sentence-transformers/all-MiniLM-L12-v2: 3.4271
 Rank 17. google/electra-small-discriminator: 2.9615
 ```
 
-The model '_deberta-v3-base_' ranks the highest, making it a good starting point for fine-tuning. We recommend fine-tuning other highly ranked models for comparison.
+The top-ranked model _'deberta-v3-base'_ is a strong candidate for fine-tuning. We recommend fine-tuning other highly ranked models for comparison.
 
 To fine-tune the top-ranked model, use any framework of your choice (e.g. 
 <a href="https://flairnlp.github.io/">Flair</a> or Transformers — we opt for the first one ;p).
@@ -367,4 +239,3 @@ This tutorial shows the four steps for selecting the best-suited LM for an NLP t
 We (1) loaded a text classification dataset, (2) prepared a list of language model names, and (3) ranked them based on transferability scores. 
 
 In the next tutorial, we give examples for a variety of NLP tasks.
-

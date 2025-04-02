@@ -32,20 +32,20 @@ ranker = TransformerRanker(dataset=dataset, dataset_downsample=0.2)
 results = ranker.run(models=language_models, batch_size=32)
 ```
 
-Train/dev/test splits are optional—TransformerRanker merges and downsamples datasets automatically. Once loaded,
-initialize the ranker with your dataset as shown in previous tutorials. For `.csv` or `.json` formats, see the complete
-load_dataset() [guide](https://huggingface.co/docs/datasets/v1.7.0/loading_datasets.html#from-local-files).
+Train/dev/test splits are optional—TransformerRanker merges and downsamples datasets automatically.
+Once loaded, initialize the ranker with your dataset as shown in previous tutorials.
+For `.csv` or `.json` formats, see the complete load_dataset() [guide](https://huggingface.co/docs/datasets/v1.7.0/loading_datasets.html#from-local-files).
 
-## Transferability Metric
+## Transferability Metrics
 
-Transferability metric can be changed by setting the `estimator` parameter in the `.run()` method.
-For example, to switch to the LogME, do:
+The transferability metric can be changed by setting the `estimator` parameter in the `.run()` method.
+For example, to switch to LogME, do:
 
 ```python
 results = ranker.run(language_models, estimator="logme")
 ```
 
-__Transferability Explanation:__ Transferability metrics estimate how well a model can apply its knowledge to a new task without fine-tuning.
+__Transferability explanation:__ Transferability metrics estimate how well a model can apply its knowledge to a new task without fine-tuning.
 For a pre-trained LM, this means assessing how well its embeddings align with a new dataset.
 
 Here are the supported metrics:
@@ -54,9 +54,9 @@ Here are the supported metrics:
 - `logme`: Suitable for both classification and regression tasks [LogME code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/logme.py).
 - `nearestneigbors`: Slowest and least accurate, but easy to interpret [k-NN code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/nearesneighbors.py).
 
-For a better understanding of each metric, refer to the comments in the code or see the original papers. 
+For better understanding of each metric, refer to the comments in code or see original papers.
 
-## Layer Aggregation
+## Layer aggregation
 
 Layer aggregation method can be changed by setting the `layer_aggregator` parameter in the `.run()` method.
 For example, to use the best performing layer, do:
@@ -88,7 +88,7 @@ language_models = prepare_popular_models('base')
 # Initialize the ranker with the dataset
 ranker = TransformerRanker(dataset, dataset_downsample=0.2)
 
-# ... and run it with custom settings
+# Run the ranker with custom settings
 results = ranker.run(language_models, estimator="logme", layer_aggregator="bestlayer")
 ```
 
@@ -124,4 +124,4 @@ Compare this ranking with the one in the main [README](https://github.com/flairN
 
 Here, we demonstrated how to load a custom dataset not hosted on the Hugging Face Hub.
 We then introduced two optional parameters for TransformerRanker: `estimator` and `layer_aggregator`,
-which can be adjusted based on the task or used to compare different transferability metrics.
+which can be adjusted based on the task or to compare transferability metrics.
