@@ -149,11 +149,11 @@ downloading the models if you don't already have them locally).
 
 ## Tutorials
 
-We provide **tutorials** to provide an introduction into the library and key concepts:
+We provide **tutorials** to introduce the library and key concepts:
 
-1. [**Tutorial 1: Library Walkthrough**](examples/01-walkthrough.md)
-2. [**Tutorial 2: Learn by Example**](examples/02-examples.md)
-3. [**Tutorial 3: Advanced**](examples/03-advanced.md)
+1. [**Tutorial 1: Library Walkthrough**](docs/01-walkthrough.md)
+2. [**Tutorial 2: Learn by Example**](docs/02-examples.md)
+3. [**Tutorial 3: Advanced**](docs/03-advanced.md)
 
 ## Cite
 
@@ -173,7 +173,7 @@ Please cite the following [paper](https://arxiv.org/abs/2409.05997) when using T
 
 ## Contact
 
-Please email your questions or comments to [**Lukas Garbas**](mailto:lukasgarba@gmail.com?subject=[GitHub]%20TransformerRanker)
+Please email your questions or comments to [**Lukas Garbas**](mailto:lukas.garbaciauskas@informatik.hu-berlin.de?subject=[GitHub]%20TransformerRanker)
 
 ## Contributing
 
