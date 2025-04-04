@@ -89,9 +89,15 @@ class Embedder:
         tokenized = self._tokenize(sentences)
         word_ids = tokenized.pop("word_ids")
 
-        # Forward pass to get all hidden states
+        # Forward and get all hidden states
         with torch.no_grad():
-            hidden_states = self.model(**tokenized, output_hidden_states=True).hidden_states
+            outputs = self.model(**tokenized, output_hidden_states=True)
+            if hasattr(outputs, 'hidden_states'):
+                hidden_states = outputs.hidden_states
+            elif hasattr(outputs, 'encoder_hidden_states'):
+                hidden_states = outputs.encoder_hidden_states
+            else:
+                raise ValueError(f"Could not extract hidden states from model: {self.name}")
 
         # Exclude the embedding layer (index 0)
         embeddings = torch.stack(hidden_states[1:], dim=0)
@@ -126,7 +132,7 @@ class Embedder:
             if isinstance(model, torch.nn.Module)
             else AutoModel.from_pretrained(model, local_files_only=local_files_only)
         )
-        self.name = self.model.config.name_or_path
+        self.name = getattr(self.model.config, 'name_or_path', 'Unknown Model')
 
     def _setup_tokenizer(self, tokenizer: Optional[Union[str, PreTrainedTokenizerFast]]) -> None:
         """Initialize tokenizer using AutoTokenizer, support PreTokenizerFast."""
