@@ -1,11 +1,10 @@
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker
 
-# Load and inspect the 'trec' dataset
+# Load the 'trec' dataset
 dataset = load_dataset("trec")
-print(dataset)
 
-# Use smaller models to run on CPU
+# Prepare smaller models to run on CPU
 language_models = [
     "prajjwal1/bert-tiny",
     "google/electra-small-discriminator",
@@ -13,17 +12,16 @@ language_models = [
     "bert-base-uncased",
 ]
 
-# Initialize the ranker
+# Initialize the ranker and downsample the dataset
 ranker = TransformerRanker(
     dataset=dataset,
-    dataset_downsample=0.2,
+    dataset_downsample=0.015,
     label_column="coarse_label",
 )
 
-# ... and run it
+# ... and run it with language models
 result = ranker.run(models=language_models, batch_size=32)
 
-# Print the scores
 print(result)
 
 """Result: 

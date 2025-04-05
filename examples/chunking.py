@@ -4,7 +4,7 @@ from transformer_ranker import TransformerRanker
 # Load the 'conll2003' dataset
 dataset = load_dataset("conll2003")
 
-# Use smaller models to run on CPU
+# Prepare smaller models to run on CPU
 models = [
     "prajjwal1/bert-tiny",
     "google/electra-small-discriminator",
@@ -15,10 +15,9 @@ models = [
 # Initialize the ranker, set labels to chunk tags
 ranker = TransformerRanker(dataset=dataset, dataset_downsample=0.2, label_column="chunk_tags")
 
-# ... and run it
+# ... and run it with language models
 result = ranker.run(models=models, batch_size=64)
 
-# Print the scores
 print(result)
 
 """Result

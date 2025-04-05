@@ -4,7 +4,7 @@ from transformer_ranker import TransformerRanker
 # Load the WNUT-17 NER dataset of English tweets
 dataset_ner = load_dataset("leondz/wnut_17")
 
-# Use smaller models to test on CPU
+# Prepare smaller models to test on CPU
 models = [
     "prajjwal1/bert-tiny",
     "google/electra-small-discriminator",
@@ -18,7 +18,6 @@ ranker = TransformerRanker(dataset=dataset_ner, dataset_downsample=0.2, label_co
 # ... and run it
 result = ranker.run(models=models, batch_size=64)
 
-# Print the scores
 print(result)
 
 """Result

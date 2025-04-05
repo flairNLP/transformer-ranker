@@ -1,16 +1,15 @@
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker
 
-# Load a dataset, initialize the ranker
+# Load a dataset and initialize ranker
 dataset = load_dataset("trec")
 ranker = TransformerRanker(dataset=dataset, dataset_downsample=0.2)
 
-# Load smaller models
+# Prepare smaller models
 models = ["prajjwal1/bert-tiny", "google/electra-small-discriminator"]
 
 # ... and rank them using a large batch size
 result = ranker.run(models=models, batch_size=124)
-print(result)
 
 # Add larger models
 models = ["bert-large-cased", "google/electra-large-discriminator"]
