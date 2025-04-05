@@ -37,7 +37,7 @@ class DatasetCleaner:
     def prepare_dataset(
         self, dataset: Union[str, Dataset, DatasetDict]
     ) -> tuple[Union[list[str], list[list[str]]], torch.Tensor, TaskCategory]:
-        """Prepare texts and labels, and assign task category.
+        """Prepare texts and labels, assign task category.
 
         Downsample dataset, find text and label columns, create label map,
         preprocess labels, pre-tokenize, clean rows, merge text pair columns.
@@ -288,14 +288,12 @@ class DatasetCleaner:
     @staticmethod
     def _log_dataset_info(text_column, label_column, label_map, task_category, downsample_ratio, dataset_size) -> None:
         """Log information about preprocessed dataset"""
-        logger.info(
-            f"Dataset Info - Text Column: {text_column}, Label Column: {label_column}, Task Category: {task_category}."
-        )
+        logger.info(f"Task category: {task_category}")
+        logger.info(f"Text column: {text_column}, Label column: {label_column}")
 
-        # Show dataset size
         if downsample_ratio and downsample_ratio < 1.0:
-            logger.info(f"Dataset size: {dataset_size} texts, reduced to {int(downsample_ratio * 100)}% of original.")
+            percentage = downsample_ratio * 100
+            logger.info(f"Dataset size: {dataset_size} texts, reduced to {percentage:1g}% of original.")
 
-        # And the label map
         if task_category != TaskCategory.TEXT_REGRESSION:
-            logger.info(f"Label Map: {label_map}")
+            logger.info(f"Label map: {label_map}")

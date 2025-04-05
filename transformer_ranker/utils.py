@@ -124,7 +124,7 @@ class Result:
             return "No scores available."
 
         sorted_scores = sorted(self.scores.items(), key=lambda item: item[1], reverse=True)
-        model_rank = [f"Rank {i+1}. {model}: {score:.2f}" for i, (model, score) in enumerate(sorted_scores)]
+        model_rank = [f"Rank {i+1}. {model}: {score:.4f}" for i, (model, score) in enumerate(sorted_scores)]
         return "\n".join(model_rank)
     
     def __repr__(self) -> str:
