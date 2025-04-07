@@ -21,6 +21,9 @@ class TaskCategory(str, Enum):
     TEXT_REGRESSION = "text regression"
     TOKEN_CLASSIFICATION = "token classification"
 
+    def is_classification_task(self):
+        return "classification" in self.value
+
 
 @dataclass
 class DatasetCleaner:
@@ -75,7 +78,7 @@ class DatasetCleaner:
 
         # Set or create label map for classification tasks
         label_map = self.label_map
-        if "classification" in task_category:
+        if task_category.is_classification_task():
             dataset, label_map = (dataset, label_map) if label_map else self._create_label_map(dataset, label_column)
 
             # Remove BIO encoding for token classification
@@ -288,12 +291,12 @@ class DatasetCleaner:
     @staticmethod
     def _log_dataset_info(text_column, label_column, label_map, task_category, downsample_ratio, dataset_size) -> None:
         """Log information about preprocessed dataset"""
-        logger.info(f"Task category: {task_category}")
-        logger.info(f"Text column: {text_column}, Label column: {label_column}")
+        logger.info(f"Task category: {task_category.value}")
+        logger.info(f"Text column: '{text_column}', label column: '{label_column}'")
 
         if downsample_ratio and downsample_ratio < 1.0:
             percentage = downsample_ratio * 100
             logger.info(f"Dataset size: {dataset_size} texts, reduced to {percentage:1g}% of original.")
 
-        if task_category != TaskCategory.TEXT_REGRESSION:
+        if task_category.is_classification_task():
             logger.info(f"Label map: {label_map}")
