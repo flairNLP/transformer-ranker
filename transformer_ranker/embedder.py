@@ -95,7 +95,7 @@ class Embedder:
             if hasattr(outputs, "hidden_states"):
                 hidden_states = outputs.hidden_states
             else:
-                raise ValueError(f"Failed to get hidden states from model: {self.name}")
+                raise ValueError(f"Failed to get hidden states for model: {self.name}")
 
         # Exclude the embedding layer (index 0)
         embeddings = torch.stack(hidden_states[1:], dim=0)
@@ -131,7 +131,9 @@ class Embedder:
             else AutoModel.from_pretrained(model, local_files_only=local_files_only)
         )
 
-        self.model = getattr(self.model, "encoder", self.model)  # set to encoder for encoder-decoder models
+        if hasattr(self.model.config, 'is_encoder_decoder') and self.model.config.is_encoder_decoder:
+            self.model = self.model.encoder  # remove decoder
+
         self.name = getattr(self.model.config, "name_or_path", "Unknown Model")
 
     def _setup_tokenizer(self, tokenizer: Optional[Union[str, PreTrainedTokenizerFast]]) -> None:
