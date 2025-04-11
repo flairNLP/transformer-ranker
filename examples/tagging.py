@@ -1,26 +1,26 @@
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker
 
-# Load the WNUT-17 NER dataset of English tweets
-dataset_ner = load_dataset("leondz/wnut_17")
+# Load the WNUT-17 dataset (tweets with named entity tags)
+dataset = load_dataset("leondz/wnut_17")
 
-# Prepare smaller models to test on CPU
-models = [
+# Create your own list of models
+language_models = [
     "prajjwal1/bert-tiny",
     "google/electra-small-discriminator",
     "microsoft/deberta-v3-small",
     "bert-base-uncased",
 ]
 
-# Initialize the ranker, set labels to ner tags
-ranker = TransformerRanker(dataset=dataset_ner, dataset_downsample=0.2, label_column="ner_tags")
+# Initialize the ranker and set the label column
+ranker = TransformerRanker(dataset=dataset, dataset_downsample=0.2, label_column="ner_tags")
 
-# ... and run it
-result = ranker.run(models=models, batch_size=64)
+# ... run it with lms
+result = ranker.run(models=language_models, batch_size=64)
 
 print(result)
 
-"""Result
+"""Result:
 Rank 1. microsoft/deberta-v3-small: 2.8448
 Rank 2. bert-base-uncased: 2.653
 Rank 3. google/electra-small-discriminator: 1.3075

@@ -1,21 +1,23 @@
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker
 
-# Load a dataset and initialize ranker
-dataset = load_dataset("trec")
+dataset = load_dataset('trec')
+
 ranker = TransformerRanker(dataset=dataset, dataset_downsample=0.2)
 
-# Prepare smaller models
-models = ["prajjwal1/bert-tiny", "google/electra-small-discriminator"]
+# Run 1: Rank small models
+small_models = ['prajjwal1/bert-tiny', 'google/electra-small-discriminator']
 
-# ... and rank them using a large batch size
-result = ranker.run(models=models, batch_size=124)
+# ... using a large batch size
+result = ranker.run(models=small_models, batch_size=128)
 
-# Add larger models
-models = ["bert-large-cased", "google/electra-large-discriminator"]
+# Run 2: Add rankings of larger models
+large_models = ['bert-large-cased', 'google/electra-large-discriminator']
 
-# ... and rank them using a small batch size
-result.append(ranker.run(models=models, batch_size=16))
+## ... using a small batch size
+result.append(ranker.run(batch_size=16, models=large_models))
+
+# Look at merged results
 print(result)
 
 """Result:

@@ -1,22 +1,22 @@
 from datasets import load_dataset
 from transformer_ranker import TransformerRanker
 
-# Load STS-B text pair regression dataset
-regression_dataset = load_dataset("glue", "stsb")
+# Load STS-B text-pair regression dataset
+dataset = load_dataset("glue", "stsb")
 
-# Prepare smaller models to run on CPU
-models = [
+# Create your own list of models
+language_models = [
     "prajjwal1/bert-tiny",
     "google/electra-small-discriminator",
     "microsoft/deberta-v3-small",
     "bert-base-uncased",
 ]
 
-# Initialize the ranker, set the text pair column
-ranker = TransformerRanker(dataset=regression_dataset, text_pair_column="sentence2")
+# Initialize the ranker and set the text pair column
+ranker = TransformerRanker(dataset=dataset, text_pair_column="sentence2")
 
-# ... run it using LogME for regression
-result = ranker.run(models=models, estimator="logme")
+# ... run it using LogME
+result = ranker.run(models=language_models, estimator="logme")
 
 print(result)
 
