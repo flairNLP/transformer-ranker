@@ -190,7 +190,7 @@ transformer_ranker:Task type: 'text classification'
 transformer_ranker:Dataset size: 1190 (downsampled to 0.2)
 Computing Embeddings:  100%|██████████| 19/19 [00:02<00:00,  7.69it/s]
 Transferability Score: 100%|██████████| 1/1 [00:00<00:00,  1.01it/s]
-transformer_ranker:distilbert-base-cased, estimated score: 3.9598
+transformer_ranker:distilbert-base-cased, hscore: 3.9598
 Computing Embeddings:  100%|██████████| 19/19 [00:00<00:00, 21.38it/s]
 Transferability Score:  70%|███████   | 1/1 [00:00<00:00,  9.15it/s]
 ```
