@@ -1,38 +1,47 @@
-name: Publish transformer-ranker to PyPI
+name: "Release: transformer-ranker drop"
 
 on:
   push:
     tags:
-      - 'v*.*.*'  # run only on new version tags v0.1.3
+      - 'v*.*.*'  # run on new version tags >v0.1.3
 
 jobs:
-  build-distribution:
-    name: Build sdist and wheel
+  build:
+    name: build + prepare for publish
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+  
+      - name: deps
+        run: pip install --upgrade pip build twine
 
-      - name: Install build dependencies
-        run: pip install --upgrade pip build
+      - name: version sanity check
+        run: |
+          TAG=${GITHUB_REF#refs/tags/v}
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          [ "$TAG" = "$VERSION" ] || { echo "Tag $TAG ≠ $VERSION in pyproject.toml" && exit 1; }
 
-      - name: Build package
+      - name: build package
         run: python -m build
 
-      - name: Upload distribution artifacts
+      - name: twine check
+        run: twine check dist/*
+
+      - name: stash dist
         uses: actions/upload-artifact@v4
         with:
-          name: python-package-distributions
+          name: python-package-dist
           path: dist/
 
-  publish-to-testpypi:
-    name: Publish Python distribution to TestPyPI
-    needs: build-distribution
+  testpypi:
+    name: publish transformer-ranker -> testpypi
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -41,28 +50,20 @@ jobs:
       id-token: write
 
     steps:
-      - name: Download distribution artifacts
+      - name: download distribution artifacts
         uses: actions/download-artifact@v4
         with:
-          name: python-package-distributions
+          name: python-package-dist
           path: dist/
-
-      - name: Upload to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+  
+      - name: upload -> testpypi
+        uses: pypa/gh-action-pypi-publish@v1
         with:
           repository-url: https://test.pypi.org/legacy/
 
-      - name: Verify installation from TestPyPI
-        run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple transformer-ranker
-          python -c "import transformer_ranker"
-
-  publish-to-pypi:
-    name: Publish Python distribution to PyPI
-    needs: publish-to-testpypi
+  release:
+    name: publish transformer-ranker -> pypi
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -71,11 +72,20 @@ jobs:
       id-token: write
 
     steps:
-      - name: Download distribution artifacts
+      - name: download distribution artifacts
         uses: actions/download-artifact@v4
         with:
-          name: python-package-distributions
+          name: python-package-dist
           path: dist/
 
-      - name: Upload to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: show banner
+        run: |
+          echo ""
+          echo "  // transformer-ranker v${GITHUB_REF#refs/tags/v}"
+          echo " ╭-------------------------------------------╮"
+          echo " |  uploading transformer-ranker to pypi ;p  |"
+          echo " ╰-------------------------------------------╯"
+          echo ""
+
+      - name: upload -> pypi
+        uses: pypa/gh-action-pypi-publish@v1
