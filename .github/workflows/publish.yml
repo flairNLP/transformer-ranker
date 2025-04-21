@@ -1,4 +1,4 @@
-name: "Release: transformer-ranker drop"
+name: "Release: transformer-ranker pypi"
 
 on:
   push:
@@ -40,7 +40,7 @@ jobs:
           path: dist/
 
   testpypi:
-    name: publish transformer-ranker -> testpypi
+    name: publish -> testpypi
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -57,12 +57,12 @@ jobs:
           path: dist/
   
       - name: upload -> testpypi
-        uses: pypa/gh-action-pypi-publish@v1
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
 
   release:
-    name: publish transformer-ranker -> pypi
+    name: publish -> pypi
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -88,4 +88,4 @@ jobs:
           echo ""
 
       - name: upload -> pypi
-        uses: pypa/gh-action-pypi-publish@v1
+        uses: pypa/gh-action-pypi-publish@release/v1
