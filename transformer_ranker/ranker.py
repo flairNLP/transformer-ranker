@@ -23,15 +23,15 @@ class TransformerRanker:
         **kwargs: Any,
     ):
         """
-        Prepares a dataset and compiles metrics to assess transferability.
+        Prepares huggingface text dataset (downsamples and finds the task category).
+        Sets up transferability metrics.
 
         :param dataset: a dataset from huggingface with texts and labels.
-        :param dataset_downsample: a fraction to which the dataset should be reduced.
+        :param dataset_downsample: a fraction to downsample the dataset to.
         :param text_column: the name of the column containing texts.
         :param label_column: the name of the column containing labels.
-        :param kwargs: additional dataset-specific parameters for data cleaning.
+        :param kwargs: additional parameters for dataset preprocessing.
         """
-        # Preprocess and down-sample a dataset
         datacleaner = DatasetCleaner(
             dataset_downsample=dataset_downsample,
             text_column=text_column,
@@ -46,6 +46,7 @@ class TransformerRanker:
             "logme": LogME,
             "hscore": HScore,
             "knn": NearestNeighbors,
+            # add more
         }
 
     def run(
@@ -57,23 +58,22 @@ class TransformerRanker:
         **kwargs: Any,
     ):
         """
-        Loads models, collects embeddings, and scores them.
+        Loads language models, collects embedding from each, and scores them.
 
         :param models: A list of model names
         :param estimator: Transferability metric ('hscore', 'logme', 'knn').
-        :param layer_aggregator: Method to aggregate layers ('lastlayer', 'layermean', 'bestlayer').
+        :param layer_aggregator: Method to aggregate layers ('layermean', 'lastlayer', 'bestlayer').
         :param batch_size: Number of samples per batch, defaults to 32.
         :param device: Device for embedding ('cpu', 'cuda', 'cuda:2').
-        :param gpu_estimation: Store and score embeddings on GPU for speedup.
+        :param gpu_estimation: Boolean if to compute transferability estimation using gpu.
         :param kwargs: Additional parameters for embedder class.
         :return: Returns sorted dictionary of model names and their scores
         """
         self._confirm_ranker_setup(estimator=estimator, layer_aggregator=layer_aggregator)
 
-        # Set device for models and the metric
         device = kwargs.pop("device", None)
-        gpu_estimation = kwargs.get("gpu_estimation", True)
-        if gpu_estimation:
+        estimation_using_gpu = kwargs.get("gpu_estimation", True)
+        if estimation_using_gpu:
             self.labels = self.labels.to(device)
 
         # Download models to hf cache
@@ -91,7 +91,6 @@ class TransformerRanker:
                 else kwargs.get("sentence_pooling", "mean")
             )
 
-            # Setup the embedder
             embedder = Embedder(
                 model=model,
                 layer_ids="0" if layer_aggregator == "lastlayer" else "all",
@@ -101,25 +100,26 @@ class TransformerRanker:
                 **kwargs,
             )
 
-            # Collect embeddings
+            # Collect language model embeddings
             embeddings = embedder.embed(
-                self.texts, batch_size=batch_size, unpack_to_cpu=not gpu_estimation, show_progress=True,
+                self.texts, batch_size=batch_size, unpack_to_cpu=not estimation_using_gpu, show_progress=True,
             )  # fmt: skip
 
-            # Flatten them for ner tasks
             if self.task_category == TaskCategory.TOKEN_CLASSIFICATION:
                 embeddings = [word for sentence in embeddings for word in sentence]
 
             model_name = embedder.name
-            del embedder  # remove from memory
+            del embedder  # remove language model from memory
             torch.cuda.empty_cache()
 
             # Compute transferability
             score = self._transferability_score(embeddings, metric, layer_aggregator)
 
-            # Store and log results
             result.add_score(model_name, score)
             logger.info(f"{model_name} {result.metric}: {score:.4f}")
+
+        logger.info(f"Results ▲\n{result}")
+        logger.info(f"Done!")
 
         return result
 
@@ -132,7 +132,7 @@ class TransformerRanker:
             range(num_layers), desc="Transferability score", bar_format=tqdm_bar_format, disable=not show_progress
         )
 
-        # Score each layer separately
+        # Score each hidden layer separately
         for layer_id in transferability_progress:
             layer_embeddings = torch.stack([emb[layer_id] for emb in embeddings])
             score = metric.fit(embeddings=layer_embeddings, labels=self.labels)

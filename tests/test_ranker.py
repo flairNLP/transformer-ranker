@@ -47,3 +47,5 @@ def test_ranker_bestlayer(small_language_models, trec):
     ranker = TransformerRanker(dataset=trec, dataset_downsample=0.05)
     result = ranker.run(small_language_models, layer_aggregator='bestlayer')
     assert len(str(result).split("\n")) >= 2
+
+    assert isinstance(result.layerwise_scores, dict)  # see if layer scores are there

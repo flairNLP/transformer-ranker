@@ -40,14 +40,12 @@ class DatasetCleaner:
     def prepare_dataset(
         self, dataset: Union[str, Dataset, DatasetDict]
     ) -> tuple[Union[list[str], list[list[str]]], torch.Tensor, TaskCategory]:
-        """Prepare texts and labels, assign task category.
+        """Prepares texts, labels, and assigns the task category.
 
-        Downsample dataset, find text and label columns, create label map,
-        preprocess labels, pre-tokenize, clean rows, merge text pair columns.
+        Downsamples dataset, finds text and label columns, cleans empty/noisy rows, 
+        pre-tokenizes texts, merges text pair columns, creates label map for classification.
         Returns: (processed texts, label tensor, task category)
         """
-
-        # Verify dataset type
         if not isinstance(dataset, (Dataset, DatasetDict)):
             raise ValueError(f"Unsupported dataset type: {type(dataset)}")
 
@@ -85,14 +83,12 @@ class DatasetCleaner:
             if task_category == TaskCategory.TOKEN_CLASSIFICATION and self.remove_bio_encoding:
                 dataset, label_map = self._remove_bio_encoding(dataset, label_column, label_map)
 
-        # Prepare all texts and labels as tensors
         texts = dataset[text_column]
         labels = dataset[label_column]
         if task_category == TaskCategory.TOKEN_CLASSIFICATION:
             labels = [word_label for labels in dataset[label_column] for word_label in labels]
         labels = torch.tensor(labels)
 
-        # Log dataset info
         self._log_dataset_info(
             text_column,
             label_column,

@@ -57,12 +57,12 @@ def prepare_popular_models(model_size="base") -> list[str]:
 
 def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool = True) -> logging.Logger:
     """
-    Configure the package's logger.
+    Configure logger for this transferability NLP framework
 
-    :param name: The name of the logger.
+    :param name: The name of the logger "transformer-ranker".
     :param level: The logging level (default: logging.INFO).
     :param log_to_console: Whether to log to console (default: True)
-    :return: Configured TransformerRanker logger
+    :return: Configured logger
     """
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -73,12 +73,12 @@ def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool 
         console_handler.setFormatter(logging.Formatter("transformer_ranker:%(message)s"))
         logger.addHandler(console_handler)
 
-    # Suppress future and user warnings
+    # Suppress future and user warnings 
     warnings.simplefilter("ignore", category=FutureWarning)
     warnings.simplefilter("ignore", category=UserWarning)
     transformers_logging.set_verbosity_error()
 
-    # Suppress unused weights messages when loading models
+    # Suppress unused weights messages when loading models (transformers)
     logger.addFilter(
         lambda record: not (
             "Some weights of BertModel were not initialized" in record.getMessage()
@@ -96,21 +96,21 @@ class Result:
     def __init__(self, metric: str):
         self.metric = metric
         self.scores = {}
-        self.layer_scores = {}
+        self.layerwise_scores = {}
 
-    def add_score(self, model_name: str, score: float, layer_scores: list[float] = None) -> None:
-        """Add score for a model."""
+    def add_score(self, model_name: str, score: float) -> None:
         self.scores[model_name] = score
 
-        if layer_scores is not None:  # only used for the bestlayer option
-            self.layer_scores[model_name] = layer_scores
+    def add_layerwise_scores(self, model_name: str, scores: dict) -> None:
+        """Only used for the bestlayer option."""
+        self.layerwise_scores[model_name] = scores
 
     def append(self, other: "Result") -> None:
         """Append scores from multiple runs."""
         if self.metric != other.metric:
             raise ValueError(f"Metrics do not match ({self.metric} vs {other.metric}).")
         self.scores.update(other.scores)
-        self.layer_scores.update(other.layer_scores)
+        self.layerwise_scores.update(other.layerwise_scores)
 
     def best_model(self) -> str:
         """Show the model with the highest score."""
@@ -126,6 +126,6 @@ class Result:
         sorted_scores = sorted(self.scores.items(), key=lambda item: item[1], reverse=True)
         model_rank = [f"Rank {i+1}. {model}: {score:.4f}" for i, (model, score) in enumerate(sorted_scores)]
         return "\n".join(model_rank)
-    
+
     def __repr__(self) -> str:
         return self.__str__()
