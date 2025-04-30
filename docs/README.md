@@ -1,7 +1,7 @@
 # Documentation
 
-__Welcome__ to the docs (/tutorials) for TransformerRanker. This tool lets you rank language models on downstream NLP tasks.
-Right now it supports token, text, text-pair classification and regression tasks.
+__Welcome__ to the docs (/tutorials) for TransformerRanker. It is a lightweight tool for ranking language models on downstream NLP tasks. 
+It currently supports token, text, text-pair classification and regression tasks.
 
 # Content
 
