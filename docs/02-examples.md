@@ -299,3 +299,11 @@ DatasetDict({
 
 </details>
 
+## Summary
+
+This tutorial showed how to use TransformerRanker for NER, PoS, and Text Pair tasks.
+To use it for different tasks, you typically only need to set the `label_column` or `text_pair_column` when initializing it with the dataset.
+The run method remains unchanged.
+
+In the next tutorial, we show advanced functionality like changing the transferability metric for model ranking.
+
