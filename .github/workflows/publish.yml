@@ -3,7 +3,7 @@ name: "Release: transformer-ranker pypi"
 on:
   push:
     tags:
-      - 'v*.*.*'  # run on new version tags >v0.1.3
+      - 'v*.*.*'  # run when new tag is added >v0.1.3
 
 jobs:
   build:
@@ -82,9 +82,9 @@ jobs:
         run: |
           echo ""
           echo "  // transformer-ranker v${GITHUB_REF#refs/tags/v}"
-          echo " ╭-------------------------------------------╮"
-          echo " |  uploading transformer-ranker to pypi ;p  |"
-          echo " ╰-------------------------------------------╯"
+          echo " ╭----------------------------------------╮"
+          echo " |  uploading transformer-ranker to pypi  |"
+          echo " ╰----------------------------------------╯"
           echo ""
 
       - name: upload -> pypi
