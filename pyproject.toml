@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "transformer-ranker"
 description = "Efficiently find the best-suited language model (LM) for your NLP task"
-version = "0.1.3"
+version = "0.2.0"
 authors = [{ name = "Lukas Garbas", email = "lukas.garbaciauskas@informatik.hu-berlin.de" }]
 license = { file = "LICENSE" }
 readme = "README.md"
