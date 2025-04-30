@@ -1,12 +1,10 @@
 # Tutorial 3: Advanced
 
-Previous tutorials showed how to rank LMs using default parameters and datasets from the hub.
-This tutorial covers how to load custom datasets and use two optional parameters in the ranker: `estimator` and `layer_aggregator`.
+In the advanced tutorial, we go over how to change transferability metrics using the estimator parameter, load custom datasets, and run TransformerRanker with non-default settings. We also show a special case: finding the best-performing layer in a single language model.
 
 ## Loading Custom Datasets
 
-TransformerRanker uses `load_dataset()` from the 🤗 Datasets library.
-To load local text files instead of datasets from the hub, do:
+Not all datasets are available in the Hugging Face Datasets library. If you have a custom dataset stored in local text files, you can load it using the following snippet:
 
 ```python
 from datasets import load_dataset
@@ -32,33 +30,39 @@ ranker = TransformerRanker(dataset=dataset, dataset_downsample=0.2)
 results = ranker.run(models=language_models, batch_size=32)
 ```
 
-Train/dev/test splits are optional—TransformerRanker merges and downsamples datasets automatically.
-Once loaded, initialize the ranker with your dataset as shown in previous tutorials.
-For `.csv` or `.json` formats, see the complete load_dataset() [guide](https://huggingface.co/docs/datasets/v1.7.0/loading_datasets.html#from-local-files).
+Specifying train/dev/test is optional—TransformerRanker merges and downsamples datasets automatically.
+Once loaded, do the LM ranking as in previous tutorials. 
+
+To load .json or .csv files take a look at the [guide](https://huggingface.co/docs/datasets/v1.7.0/loading_datasets.html#from-local-files) of Datasets.
 
 ## Transferability Metrics
 
-Change the transferability metric by setting the `estimator` parameter in the `.run()` method. To change to LogME, do:
+The transferability metric can be changed by setting the `estimator` parameter in the .run() method. To change the metric to LogME, do:
 
 ```python
 results = ranker.run(language_models, estimator="logme")
 ```
 
-__Transferability Explanation:__ transferability metrics estimate how suitable a model is for a new task — without requiring fine-tuning.
-For a pre-trained LM this means assessing how well its embeddings align with a new dataset.
+__Transferability Explanation:__ Transferability metrics estimate how well a model is likely to perform on a new dataset without requiring fine-tuning. For a pre-trained language model, this means evaluating how well its embeddings capture the structure of the target dataset.
 
-Here are the supported metrics:
+The following metrics are supported:
 
-- `hscore` (default): Fast and generally the best choice for most datasets. Suited for classification tasks [H-Score code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/hscore.py).
-- `logme`: Suitable for both classification and regression tasks [LogME code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/logme.py).
-- `nearestneighbors`: Slowest and least accurate, but easy to interpret [k-NN code](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/nearesneighbors.py).
+- **`hscore`** *(default)*: Fast and generally the best choice for most datasets. Suited for classification tasks
+  [View source](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/hscore.py).
 
-For a better understanding of each metric, take a look at original papers or our code and comments.
+- **`logme`**: Suitable for both classification and regression tasks
+  [View source](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/logme.py).
+
+- **`nearestneighbors`**: Slowest and least accurate, but easy to interpret
+  [View source](https://github.com/flairNLP/transformer-ranker/blob/main/transformer_ranker/estimators/nearesneighbors.py).
+
+For a better understanding of each metric, see our code and comments, or refer to the original papers. 
 
 ## Layer Aggregation
 
-By default, TransformerRanker averages all hidden layers. But some datasets may work better with other strategies.
-Use `layer_aggregator` to control which layer(s) are used for embeddings. To use the best performing layer, do:
+To improve existing transferability estimation approaches, we propose to average all hidden layers in LMs. This can be controled by changing the `layer_aggregator` parameter.
+
+To use the best performing layer, do:
 
 ```python
 results = ranker.run(language_models, layer_aggregator="bestlayer")
@@ -123,7 +127,7 @@ Compare this ranking with the one in the main [README](https://github.com/flairN
 ## Example: Inspecting Layer Transferability in a Single LM
 
 You can also inspect layer-wise transferability scores for a single large model.
-Here’s how to rank the layers of DeBERTa-v2-xxlarge (1.5B) on CoNLL2003:
+Here’s how to rank layers of DeBERTa-v2-xxlarge (1.5B) on CoNLL2003:
 
 
 ```python
@@ -154,6 +158,4 @@ Useful for inspecting layer-wise transferability for a downstream dataset.
 
 ## Summary
 
-Here, we demonstrated how to load a custom dataset not hosted on the Hugging Face Hub.
-We then introduced two optional parameters for TransformerRanker: `estimator` and `layer_aggregator`,
-which can be adjusted based on the task or to compare transferability metrics.
+In this tutorial, we explored advanced features of TransformerRanker: how to load custom datasets, switch transferability metrics with the `estimator` parameter, and identify the best-suited layer using the `layer_aggregator` parameter. These settings can be adjusted based on the task or to compare different transferability metrics. 
