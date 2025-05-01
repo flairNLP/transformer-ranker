@@ -13,7 +13,7 @@ logger = configure_logger("transformer_ranker", logging.INFO)
 
 
 class TaskCategory(str, Enum):
-    """Supported task categories"""
+    """Supported tasks"""
 
     TEXT_CLASSIFICATION = "text classification"
     TEXT_PAIR_CLASSIFICATION = "text pair classification"
