@@ -1,62 +1,86 @@
 # Contributing to TransformerRanker
 
-__Thanks__ for your interest in contributing to `transformer-ranker`! We're building a lightweight tool for ranking language models via transferability. 
+__Thanks__ for your interest in contributing to `transformer-ranker`. Whether it’s a bug report, new feature, or doc fix, it’s appreciated. Please read this before opening an issue or PR.
 
-Spotted a bug, got an idea, or want to open a PR? any kind of involvement helps shape where it goes.
+## Reporting Bugs / Requesting Features
 
-## See Exiting Work
+Use [issues](https://github.com/flairNLP/transformer-ranker/issues) to report bugs or suggest improvements.
 
-Before starting, check open [issues](https://github.com/flairNLP/transformer-ranker/issues) and [pull requests](https://github.com/flairNLP/transformer-ranker/pulls) to avoid duplicates.
-Planning something new? Consider opening an issue first. Discussion is welcome.
+Before opening a new issue:
 
-## Setup
+- See if similar issues and PRs already exist
+- If not, feel free to create a new one
 
-We recommend Python 3.9.x during development. To install dev dependencies:
+Helpful info to include:
+
+- What you did and what went wrong
+- Reproducible steps or a minimal example (if possible)
+
+## Contributing with Pull Requests
+
+Pull requests are welcome.
+
+Before submitting:
+
+- Make sure you're on top of `main`
+- For larger changes, open an issue first to discuss
+
+Steps:
+
+1. Fork the repo and create a new branch
+2. Make your changes (keep it focused)
+3. Format and test
+4. Commit with a clear message
+5. Open a PR and respond to feedback if needed
+
+## Dev Setup
+
+Use Python 3.9.x in a clean environment (e.g., virtualenv or conda).
+
+Install dev dependencies:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-Use a clean environment (virtualenv or conda).
-Explore `examples/` and `tests/` to get familiar.
-
-## Code Style & Linting
-
 We use:
 
 - [black](https://github.com/psf/black) — code formatting
 - [ruff](https://github.com/astral-sh/ruff) — linting & import sorting
+- [pytest](https://docs.pytest.org/) — testing
 
-To format:
+To format and lint:
 
 ```bash
 black . && ruff --fix .
 ```
 
-## Run Tests
-
-Tests are written using pytest. Run all tests with:
+To run tests:
 
 ```bash
 pytest tests
 ```
 
-## Add New Transferability Metrics
+---
 
+## Adding New Metrics
 
-New metrics go in `transformer_ranker/estimators/`.
-Include docstrings and paper references. Clear comments = appreciated.
+New estimators go in:
 
-## Explore and Expand
+```
+transformer_ranker/estimators/
+```
 
-Try weird models or datasets. If something fails — open an issue.
-Ideas for model ranking for tasks like summarization are also welcome.
+Please include:
+
+- Docstrings and helpful comments
+- Paper references (if relevant)
+- Associated tests in `tests/` (if possible)
 
 ## Enhancements
 
-Test the tool with unusual models and datasets. Open issues or PRs if you encounter unsupported models. Consider exploring ways to apply transferability to other tasks, such as summarization.
+Test the tool with new models and datasets. Open issues or PRs if you encounter anything unsupported. Consider exploring ways to apply transferability to other tasks, such as summarization.
 
-----------------
+## License
 
-Contributions big or small are appreciated! 🚀
-Want to suggest something now? → Open an [issues](https://github.com/flairNLP/transformer-ranker/issues) 
+MIT. See [LICENSE](./LICENSE). By contributing, you agree your code is shared under the same license.

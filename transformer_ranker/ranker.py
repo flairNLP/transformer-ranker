@@ -118,8 +118,7 @@ class TransformerRanker:
             result.add_score(model_name, score)
             logger.info(f"{model_name} {result.metric}: {score:.4f}")
 
-        logger.info(f"Results ▲\n{result}")
-        logger.info(f"Done!")
+        logger.info(f"Results\n{result}")
 
         return result
 
