@@ -37,10 +37,10 @@ Steps:
 
 Use Python 3.9.x in a clean environment (e.g., virtualenv or conda).
 
-Install dev dependencies:
+Install dev and testing dependencies:
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[testing,dev]"
 ```
 
 We use:
