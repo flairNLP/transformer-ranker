@@ -3,7 +3,7 @@ import torch
 
 from transformer_ranker.embedder import Embedder
 
-test_sentences = [
+test_texts = [
     "this is a test sentence",
     ["this", "is", "a", "test", "sentence"],
     ["this is the first sentence.", "this is the second sentence."],
@@ -19,8 +19,8 @@ def test_embedder_outputs(small_language_models):
     for model in small_language_models:
         embedder = Embedder(model=model)
 
-        for sentence in test_sentences:
-            embeddings = embedder.embed(sentence)
+        for text in test_texts:
+            embeddings = embedder.embed(text)
             assert isinstance(embeddings, list)
             assert all(isinstance(emb, torch.Tensor) for emb in embeddings)
             assert all(emb.dim() > 0 for emb in embeddings)

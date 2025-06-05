@@ -73,7 +73,7 @@ def configure_logger(name: str, level: int = logging.INFO, log_to_console: bool 
         console_handler.setFormatter(logging.Formatter("transformer_ranker:%(message)s"))
         logger.addHandler(console_handler)
 
-    # Suppress future and user warnings 
+    # Suppress future and user warnings
     warnings.simplefilter("ignore", category=FutureWarning)
     warnings.simplefilter("ignore", category=UserWarning)
     transformers_logging.set_verbosity_error()

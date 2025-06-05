@@ -131,7 +131,7 @@ class Embedder:
             else AutoModel.from_pretrained(model, local_files_only=local_files_only)
         )
 
-        if hasattr(self.model.config, 'is_encoder_decoder') and self.model.config.is_encoder_decoder:
+        if hasattr(self.model.config, "is_encoder_decoder") and self.model.config.is_encoder_decoder:
             self.model = self.model.encoder  # remove decoder
 
         self.name = getattr(self.model.config, "name_or_path", "Unknown Model")
