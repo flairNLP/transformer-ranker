@@ -16,10 +16,10 @@ class TaskCategory(str, Enum):
     """Supported tasks"""
 
     TEXT_CLASSIFICATION = "text classification"
-    TEXT_PAIR_CLASSIFICATION = "text pair classification"
-    TEXT_PAIR_REGRESSION = "text pair regression"
-    TEXT_REGRESSION = "text regression"
     TOKEN_CLASSIFICATION = "token classification"
+    TEXT_REGRESSION = "text regression"
+    PAIR_CLASSIFICATION = "pair classification"
+    SENTENCE_SIMILARITY = "sentence similarity"
 
     def is_classification_task(self):
         return "classification" in self.value
@@ -42,7 +42,7 @@ class DatasetCleaner:
     ) -> tuple[Union[list[str], list[list[str]]], torch.Tensor, TaskCategory]:
         """Prepares texts, labels, and assigns the task category.
 
-        Downsamples dataset, finds text and label columns, cleans empty/noisy rows, 
+        Downsamples dataset, finds text and label columns, cleans empty/noisy rows,
         pre-tokenizes texts, merges text pair columns, creates label map for classification.
         Returns: (processed texts, label tensor, task category)
         """
@@ -169,8 +169,8 @@ class DatasetCleaner:
         # If text pairs are present, adjust category
         if text_pair_column in dataset.column_names:
             pair_mapping = {
-                TaskCategory.TEXT_CLASSIFICATION: TaskCategory.TEXT_PAIR_CLASSIFICATION,
-                TaskCategory.TEXT_REGRESSION: TaskCategory.TEXT_PAIR_REGRESSION,
+                TaskCategory.TEXT_CLASSIFICATION: TaskCategory.PAIR_CLASSIFICATION,
+                TaskCategory.TEXT_REGRESSION: TaskCategory.SENTENCE_SIMILARITY,
             }
             task_category = pair_mapping.get(task_category, task_category)
 

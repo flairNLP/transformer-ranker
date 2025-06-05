@@ -39,7 +39,7 @@ class TransformerRanker:
             **kwargs,
         )
 
-        self.texts, self.labels, self.task_category = datacleaner.prepare_dataset(dataset)
+        self.texts, self.labels, self.task = datacleaner.prepare_dataset(dataset)
 
         # Supported metrics
         self.transferability_metrics = {
@@ -80,15 +80,13 @@ class TransformerRanker:
         self._preload_models(models=models, device=device)
 
         # Set transferability metric
-        regression = self.task_category == TaskCategory.TEXT_REGRESSION
+        regression = "similarity" in self.task.value or "regression" in self.task.value
         metric = self.transferability_metrics[estimator](regression=regression)
         result = Result(metric=estimator)
 
         for model in models:
             effective_sentence_pooling = (
-                None
-                if self.task_category == TaskCategory.TOKEN_CLASSIFICATION
-                else kwargs.get("sentence_pooling", "mean")
+                None if self.task == TaskCategory.TOKEN_CLASSIFICATION else kwargs.get("sentence_pooling", "mean")
             )
 
             embedder = Embedder(
@@ -105,7 +103,7 @@ class TransformerRanker:
                 self.texts, batch_size=batch_size, unpack_to_cpu=not estimation_using_gpu, show_progress=True,
             )  # fmt: skip
 
-            if self.task_category == TaskCategory.TOKEN_CLASSIFICATION:
+            if self.task == TaskCategory.TOKEN_CLASSIFICATION:
                 embeddings = [word for sentence in embeddings for word in sentence]
 
             model_name = embedder.name

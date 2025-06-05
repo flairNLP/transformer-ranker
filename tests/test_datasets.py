@@ -61,41 +61,38 @@ def test_merge_text_pairs(custom_dataset):
 
 
 @pytest.mark.parametrize(
-    "dataset_name,text_pair_column,task_category",
+    "dataset_name,columns,expected_task,expected_dtype,downsample",
     [
-        ("trec", None, TaskCategory.TEXT_CLASSIFICATION),
-        ("yangwang825/sick", "text2", TaskCategory.TEXT_PAIR_CLASSIFICATION),
-        ("SetFit/rte", "text2", TaskCategory.TEXT_PAIR_CLASSIFICATION),
-        ("SetFit/stsb", "text2", TaskCategory.TEXT_PAIR_REGRESSION),
-    ],
-)
-def test_task_category_assignment(dataset_name, text_pair_column, task_category):
-    """Test task category assignment for different datasets."""
-    dataset = load_dataset(dataset_name, trust_remote_code=True)
-    cleaner = DatasetCleaner(text_pair_column=text_pair_column, dataset_downsample=0.05)
-    _, _, task = cleaner.prepare_dataset(dataset)
-    assert task == task_category, f"Expected '{task_category}',got '{task}' for {dataset_name}."
+        # Text classification
+        ("trec", {"text_column": "text", "label_column": "coarse_label"}, TaskCategory.TEXT_CLASSIFICATION, torch.int64, 0.05),
+        ("ag_news", {"text_column": "text", "label_column": "label"}, TaskCategory.TEXT_CLASSIFICATION, torch.int64, 0.05),
+        ("stanfordnlp/sst2", {"text_column": "sentence", "label_column": "label"}, TaskCategory.TEXT_CLASSIFICATION, torch.int64, 0.05),
+        ("Hobson/surname-nationality", {"text_column": "surname", "label_column": "nationality"}, TaskCategory.TEXT_CLASSIFICATION, torch.int64, 0.05),
 
+        # Token classification
+        ("conll2003", {"text_column": "tokens", "label_column": "ner_tags"}, TaskCategory.TOKEN_CLASSIFICATION, torch.int64, 0.01),
+        ("wnut_17", {"text_column": "tokens", "label_column": "ner_tags"}, TaskCategory.TOKEN_CLASSIFICATION, torch.int64, 0.01),
+        ("benjamin/ner-uk", {"text_column": "tokens", "label_column": "ner_tags"}, TaskCategory.TOKEN_CLASSIFICATION, torch.int64, 0.01),
+        ("mpsilfve/finer", {"text_column": "tokens", "label_column": "ner_tags"}, TaskCategory.TOKEN_CLASSIFICATION, torch.int64, 0.01),
 
-@pytest.mark.parametrize(
-    "dataset_name,task_category,downsample_ratio",
-    [
-        ("conll2003", TaskCategory.TOKEN_CLASSIFICATION, 0.01),
-        ("wnut_17", TaskCategory.TOKEN_CLASSIFICATION, 0.05),
-        ("trec", TaskCategory.TEXT_CLASSIFICATION, 0.05),
-        ("stanfordnlp/sst2", TaskCategory.TEXT_CLASSIFICATION, 0.005),
-        ("hate_speech18", TaskCategory.TEXT_CLASSIFICATION, 0.025),
-        ("yangwang825/sick", TaskCategory.TEXT_CLASSIFICATION, 0.025),
-        ("SetFit/rte", TaskCategory.TEXT_CLASSIFICATION, 0.05),
-        ("SetFit/stsb", TaskCategory.TEXT_REGRESSION, 0.05),
-    ],
+        # Pair classification
+        ("yangwang825/sick", {"text_pair_column": "text2", "label_column": "label"}, TaskCategory.PAIR_CLASSIFICATION, torch.int64, 0.025),
+        ("SetFit/rte", {"text_pair_column": "text2", "label_column": "label"}, TaskCategory.PAIR_CLASSIFICATION, torch.int64, 0.025),
+        ("curaihealth/medical_questions_pairs", {"text_pair_column": "question_2", "label_column": "label"}, TaskCategory.PAIR_CLASSIFICATION, torch.int64, 0.05),
+
+        # Sentence similarity
+        ("SetFit/stsb", {"text_pair_column": "text2", "label_column": "label"}, TaskCategory.SENTENCE_SIMILARITY, torch.float, 0.05),
+        ("mteb/sickr-sts", {"text_pair_column": "sentence2", "label_column": "score"}, TaskCategory.SENTENCE_SIMILARITY, torch.float, 0.05),
+        ("Ukhushn/home-depot", {"text_column": "search_term", "text_pair_column": "product_description", "label_column": "relevance"}, TaskCategory.SENTENCE_SIMILARITY, torch.float, 0.05),
+    ]  # fmt: skip
 )
-def test_different_datasets(dataset_name, task_category, downsample_ratio):
-    """Load different datasets and verify preprocessing of texts, labels, and task category."""
+def test_dataset_preprocessing(dataset_name, columns, expected_task, expected_dtype, downsample):
+    """Test preprocessing for different datasets and tasks."""
     dataset = load_dataset(dataset_name, trust_remote_code=True)
-    cleaner = DatasetCleaner(dataset_downsample=downsample_ratio)
+    cleaner = DatasetCleaner(dataset_downsample=downsample, **columns)
     texts, labels, task = cleaner.prepare_dataset(dataset)
 
-    assert task == task_category, f"Expected {task_category}, got {task} for {dataset_name}."
-    assert isinstance(texts, list) and texts, f"Empty texts in {dataset_name}."
+    assert task == expected_task, f"Expected task '{expected_task}' for {dataset_name}."
+    assert isinstance(texts, list) and texts, f"Empty or invalid texts in {dataset_name}."
     assert isinstance(labels, torch.Tensor) and labels.numel() > 0, f"Empty labels in {dataset_name}."
+    assert labels.dtype == expected_dtype, f"Expected {expected_dtype} labels for {dataset_name}, got {labels.dtype}."
