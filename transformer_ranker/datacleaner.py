@@ -17,9 +17,9 @@ class TaskCategory(str, Enum):
 
     TEXT_CLASSIFICATION = "text classification"
     TOKEN_CLASSIFICATION = "token classification"
-    TEXT_REGRESSION = "text regression"
     PAIR_CLASSIFICATION = "pair classification"
     SENTENCE_SIMILARITY = "sentence similarity"
+    TEXT_REGRESSION = "text regression"
 
     def is_classification_task(self):
         return "classification" in self.value
@@ -61,7 +61,7 @@ class DatasetCleaner:
         # Merge text pair columns using a separator
         if self.text_pair_column:
             dataset = self._merge_text_pairs(dataset, text_column, self.text_pair_column)
-            text_column = f"{text_column}_with_{self.text_pair_column}"
+            text_column = f"{text_column}_pair_{self.text_pair_column}"
 
         # Remove unused columns
         dataset = dataset.select_columns([text_column, label_column])
@@ -110,7 +110,7 @@ class DatasetCleaner:
             ],
             "label column": [
                 "label", "ner_tag", "named_entities", "entities", "tag", "target", "category",
-                "class", "sentiment", "polarity", "emotion", "rating", "stance",
+                "class", "sentiment", "score", "polarity", "rating", "stance",
             ]
         }  # fmt: skip
 
@@ -138,8 +138,8 @@ class DatasetCleaner:
             desc="Merging text pair columns",
         )
 
-        new_text_column_name = text_column + "_with_" + text_pair_column
-        dataset = dataset.rename_column(text_column, new_text_column_name)
+        pair_column = text_column + "_pair_" + text_pair_column
+        dataset = dataset.rename_column(text_column, pair_column)
         return dataset
 
     @staticmethod

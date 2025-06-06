@@ -80,7 +80,7 @@ class TransformerRanker:
         self._preload_models(models=models, device=device)
 
         # Set transferability metric
-        regression = "similarity" in self.task.value or "regression" in self.task.value
+        regression = "regression" in self.task.value or "similarity" in self.task.value
         metric = self.transferability_metrics[estimator](regression=regression)
         result = Result(metric=estimator)
 

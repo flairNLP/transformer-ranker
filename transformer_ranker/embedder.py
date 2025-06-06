@@ -72,7 +72,7 @@ class Embedder:
         batches = [sentences[i : i + batch_size] for i in range(0, len(sentences), batch_size)]
         progress_bar = tqdm(
             batches,
-            desc="Generating embeddings",
+            desc="Computing embeddings",
             disable=not show_progress,
             bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}",
         )

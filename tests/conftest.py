@@ -48,7 +48,7 @@ def custom_dataset():
     return Dataset.from_dict(
         {
             "text": ["whatsup", "quick", "", "datasets", "test"],
-            "text_pair": ["Papers", "with", "code", "humboldt", "focus"],
+            "other": ["Papers", "with", "code", "humboldt", "focus"],
             "label": [1, 0, 2, 1, 2],
             "extra": [100, 200, 300, 400, 500],
         }
