@@ -102,7 +102,7 @@ class Embedder:
         embeddings = embeddings.permute(1, 2, 0, 3)
 
         # Zero out padded tokens
-        embeddings = embeddings * tokenized["attention_mask"].unsqueeze(-1).unsqueeze(-1)
+        embeddings = embeddings * tokenized["attention_mask"][:, :, None, None]
 
         # Select and average hidden states
         embeddings = embeddings[:, :, self.layer_ids, :]

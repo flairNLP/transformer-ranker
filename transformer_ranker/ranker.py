@@ -86,7 +86,7 @@ class TransformerRanker:
 
         for model in models:
             effective_sentence_pooling = (
-                None if self.task == TaskCategory.TOKEN_CLASSIFICATION else kwargs.get("sentence_pooling", "mean")
+                None if self.task == TaskCategory.TOKEN_CLASSIFICATION else kwargs.pop("sentence_pooling", "mean")
             )
 
             embedder = Embedder(
