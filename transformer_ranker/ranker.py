@@ -23,10 +23,10 @@ class TransformerRanker:
         **kwargs: Any,
     ):
         """
-        Prepares huggingface text dataset (downsamples and finds the task category).
+        Prepares huggingface dataset (downsamples and assigns a task category).
         Sets up transferability metrics.
 
-        :param dataset: a dataset from huggingface with texts and labels.
+        :param dataset: a dataset with texts and labels.
         :param dataset_downsample: a fraction to downsample the dataset to.
         :param text_column: the name of the column containing texts.
         :param label_column: the name of the column containing labels.
@@ -58,7 +58,7 @@ class TransformerRanker:
         **kwargs: Any,
     ):
         """
-        Loads language models, collects embedding from each, and scores them.
+        Loads language models and scores each for transferability.
 
         :param models: A list of model names
         :param estimator: Transferability metric ('hscore', 'logme', 'knn').
@@ -79,7 +79,7 @@ class TransformerRanker:
         # Download models to hf cache
         self._preload_models(models=models, device=device)
 
-        # Set transferability metric
+        # Set the metric
         regression = "regression" in self.task.value or "similarity" in self.task.value
         metric = self.transferability_metrics[estimator](regression=regression)
         result = Result(metric=estimator)
@@ -91,14 +91,14 @@ class TransformerRanker:
 
             embedder = Embedder(
                 model=model,
-                layer_ids="0" if layer_aggregator == "lastlayer" else "all",
+                layer_ids="-1" if layer_aggregator == "lastlayer" else "all",
                 layer_mean=True if "mean" in layer_aggregator else False,
                 sentence_pooling=effective_sentence_pooling,
                 device=device,
                 **kwargs,
             )
 
-            # Collect language model embeddings
+            # embed texts with an lm
             embeddings = embedder.embed(
                 self.texts, batch_size=batch_size, unpack_to_cpu=not estimation_using_gpu, show_progress=True,
             )  # fmt: skip
@@ -107,7 +107,7 @@ class TransformerRanker:
                 embeddings = [word for sentence in embeddings for word in sentence]
 
             model_name = embedder.name
-            del embedder  # remove language model from memory
+            del embedder  # remove lm from memory
             torch.cuda.empty_cache()
 
             # Compute transferability
@@ -121,7 +121,7 @@ class TransformerRanker:
         return result
 
     def _transferability_score(self, embeddings, metric, layer_aggregator, show_progress=True) -> float:
-        """Compute transferability for a model"""
+        """Computes transferability for a model"""
         tqdm_bar_format = "{l_bar}{bar:10}{r_bar}{bar:-10b}"
         num_layers, scores_per_layer = len(embeddings[0]), []
 
@@ -142,7 +142,7 @@ class TransformerRanker:
         return aggregated_score
 
     def _preload_models(self, models: list[str], device: Optional[str] = None) -> None:
-        """Load models to HuggingFace cache if not already present"""
+        """Loads models into HuggingFace cache if not already cached"""
         cached_models, downloaded_models = set(), set()
 
         for model in models:
@@ -162,13 +162,13 @@ class TransformerRanker:
                 Embedder(model, device=device)
 
     def _confirm_ranker_setup(self, estimator: str, layer_aggregator: str) -> None:
-        """Validate main parameters in the run method"""
-        available_metrics = self.transferability_metrics.keys()
-        if estimator not in available_metrics:
+        """Validates parameters in the run method"""
+        supported_metrics = self.transferability_metrics.keys()
+        if estimator not in supported_metrics:
             raise ValueError(f"Unsupported metric '{estimator}'. Valid options: {', '.join(available_metrics)}")
 
-        available_layer_pooling = {"layermean", "lastlayer", "bestlayer"}
-        if layer_aggregator not in available_layer_pooling:
+        supported_layer_aggregations = {"layermean", "lastlayer", "bestlayer"}
+        if layer_aggregator not in supported_layer_aggregations:
             raise ValueError(
-                f"Unsupported aggregation '{layer_aggregator}'. Valid options: {', '.join(available_layer_pooling)}"
+                f"Unsupported aggregation '{layer_aggregator}'. Valid options: {', '.join(supported_layer_aggregations)}"
             )

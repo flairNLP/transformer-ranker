@@ -22,7 +22,7 @@ class Embedder:
     ):
         """
         Generates word or text embeddings using a pre-trained model.
-        Does sub-word and sequence (sentence) pooling.
+        Does sub-word and document pooling.
 
         :param model: Model name or instance.
         :param tokenizer: Tokenizer name or instance.
