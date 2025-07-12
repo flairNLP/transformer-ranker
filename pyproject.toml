@@ -19,7 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "accelerate",
-    "datasets",
+    "datasets<4.0.0",
     "sentencepiece",
     "tokenizers",
     "torch",
