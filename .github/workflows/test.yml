@@ -4,17 +4,17 @@ on:
   push:
     branches: [ "main" ]
     paths-ignore:
-    - "examples/**"
-    - ".gitignore"
-    - "README.md"
-    - "LICENSE"
+      - "examples/**"
+      - ".gitignore"
+      - "README.md"
+      - "LICENSE"
   pull_request:
     branches: [ "main" ]
     paths-ignore:
-    - "examples/**"
-    - ".gitignore"
-    - "README.md"
-    - "LICENSE"
+      - "examples/**"
+      - ".gitignore"
+      - "README.md"
+      - "LICENSE"
 
 jobs:
   test:
@@ -37,6 +37,9 @@ jobs:
 
       - name: Install dependencies
         run: pip install .[testing]
+
+      - name: Show dependency versions
+        run: pip freeze
 
       - name: Run pytest
         run: pytest
