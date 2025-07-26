@@ -1,5 +1,3 @@
-from typing import Union
-
 import torch
 from torch.nn.functional import cosine_similarity
 from torchmetrics.functional import f1_score

@@ -1,5 +1,4 @@
 import logging
-import operator
 import warnings
 
 from transformers import logging as transformers_logging

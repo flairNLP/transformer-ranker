@@ -165,7 +165,7 @@ class TransformerRanker:
         """Validates parameters in the run method"""
         supported_metrics = self.transferability_metrics.keys()
         if estimator not in supported_metrics:
-            raise ValueError(f"Unsupported metric '{estimator}'. Valid options: {', '.join(available_metrics)}")
+            raise ValueError(f"Unsupported metric '{estimator}'. Valid options: {', '.join(supported_metrics)}")
 
         supported_layer_aggregations = {"layermean", "lastlayer", "bestlayer"}
         if layer_aggregator not in supported_layer_aggregations:

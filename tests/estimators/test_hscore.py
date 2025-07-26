@@ -14,4 +14,4 @@ def test_hscore_california_housing(california_housing_dataset):
     """H-Score should not be suited for regression."""
     with pytest.raises(ValueError, match=r"HScore is not suitable for regression"):
         estimator = HScore(regression=True)
-        score = estimator.fit(california_housing_dataset["data"], california_housing_dataset["labels"])
+        estimator.fit(california_housing_dataset["data"], california_housing_dataset["labels"])
