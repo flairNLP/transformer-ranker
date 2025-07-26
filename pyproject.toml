@@ -31,7 +31,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/flairNLP/transformer-ranker"
 Repository = "https://github.com/flairNLP/transformer-ranker"
-Documentation = "https://github.com/flairNLP/transformer-ranker/tree/main/examples"
+Documentation = "https://github.com/flairNLP/transformer-ranker/tree/main/docs"
 
 [tool.setuptools.packages.find]
 include = ["transformer_ranker*"]
